@@ -1,0 +1,1141 @@
+openapi: 3.0.3
+info:
+  title: MentIA API
+  version: 0.1.0
+  description: |
+    Contrato del backend del MVP de MentIA. Es la fuente de verdad para backend y frontend,
+    y el front puede trabajar con mocks generados desde este archivo.
+
+    Reglas transversales:
+    - Todos los endpoints requieren `Authorization: Bearer <JWT>` salvo los marcados como publicos.
+    - Los errores usan `application/problem+json` (RFC 7807) con un campo `code` estable.
+    - Codigos de error usados: VALIDATION_ERROR, USERNAME_TAKEN, INVALID_CREDENTIALS, INVALID_RECOVERY,
+      UNAUTHORIZED, ASSESSMENT_REQUIRED, SESSION_NOT_FOUND, SESSION_STATE_INVALID, ITEM_NOT_IN_SESSION.
+    - Los scores y niveles representan desempeno dentro de MentIA. No son mediciones clinicas.
+    - Fechas y horas en UTC (ISO 8601).
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Perfil
+  - name: Catalogo
+  - name: Sesiones
+  - name: Progreso
+  - name: Gamificacion
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Registro seudonimizado (BACK-01)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuario creado. El codigo de recuperacion se muestra una sola vez.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Login con username y contrasena (BACK-03)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Token de acceso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Cierre de sesion, revoca el token actual (BACK-03)
+      responses:
+        '204':
+          description: Sesion cerrada
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/recovery/reset:
+    post:
+      tags: [Auth]
+      operationId: resetPassword
+      summary: Restablecer contrasena con codigo de recuperacion (BACK-03B)
+      description: Rota el codigo de recuperacion y revoca los tokens activos. El error es siempre generico.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryResetRequest'
+      responses:
+        '200':
+          description: Contrasena cambiada. Devuelve el nuevo codigo de recuperacion.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryCodeResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/recovery/regenerate:
+    post:
+      tags: [Auth]
+      operationId: regenerateRecoveryCode
+      summary: Regenerar el codigo de recuperacion (BACK-03B)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegenerateRecoveryRequest'
+      responses:
+        '200':
+          description: Nuevo codigo, se muestra una sola vez
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryCodeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile:
+    get:
+      tags: [Perfil]
+      operationId: getProfile
+      summary: Perfil de entrenamiento (BACK-02)
+      responses:
+        '200':
+          description: Perfil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Perfil]
+      operationId: updateProfile
+      summary: Actualizar perfil de entrenamiento (BACK-02)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdate'
+      responses:
+        '200':
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile/performance:
+    get:
+      tags: [Perfil]
+      operationId: getPerformanceProfile
+      summary: Perfil de desempeno por categoria (BACK-08)
+      responses:
+        '200':
+          description: Desempeno actual por categoria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /categories:
+    get:
+      tags: [Catalogo]
+      operationId: listCategories
+      summary: Categorias activas (BACK-06)
+      responses:
+        '200':
+          description: Lista de categorias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /assessment/start:
+    post:
+      tags: [Sesiones]
+      operationId: startAssessment
+      summary: Iniciar o retomar la evaluacion inicial (BACK-07)
+      description: |
+        Crea una sesion de tipo INITIAL_ASSESSMENT. Si ya hay una evaluacion GENERATED o IN_PROGRESS
+        la devuelve con 200 (retomar), salvo que `restart=true`, que abandona la anterior y crea una nueva.
+      parameters:
+        - name: restart
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Evaluacion existente, para retomar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '201':
+          description: Evaluacion creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sessions:
+    post:
+      tags: [Sesiones]
+      operationId: createSession
+      summary: Generar una sesion de entrenamiento (BACK-09)
+      description: |
+        Requiere evaluacion inicial completada (409 ASSESSMENT_REQUIRED). Si hay una sesion de
+        entrenamiento GENERATED o IN_PROGRESS no vencida, la devuelve con 200.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '200':
+          description: Sesion existente no vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '201':
+          description: Sesion generada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [Sesiones]
+      operationId: listSessions
+      summary: Historial de sesiones (BACK-14)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Pagina de sesiones, mas recientes primero
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionHistoryPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sessions/{sessionId}:
+    get:
+      tags: [Sesiones]
+      operationId: getSession
+      summary: Obtener una sesion con sus items
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Sesion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sessions/{sessionId}/start:
+    post:
+      tags: [Sesiones]
+      operationId: startSession
+      summary: Comenzar la sesion, pasa de GENERATED a IN_PROGRESS
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Sesion en curso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /sessions/{sessionId}/attempts:
+    post:
+      tags: [Sesiones]
+      operationId: recordAttempt
+      summary: Registrar el resultado de un item (BACK-12)
+      description: |
+        Idempotente por `clientAttemptId`. Si se repite, devuelve 200 con el intento original.
+        La sesion debe estar IN_PROGRESS.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttemptRequest'
+      responses:
+        '200':
+          description: Intento ya registrado previamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttemptResponse'
+        '201':
+          description: Intento registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttemptResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /sessions/{sessionId}/complete:
+    post:
+      tags: [Sesiones]
+      operationId: completeSession
+      summary: Cerrar la sesion y consolidar resultados (BACK-13)
+      description: |
+        Para sesiones INITIAL_ASSESSMENT calcula ademas el nivel inicial por categoria (BACK-07).
+        Actualiza el perfil de desempeno y los niveles, y dispara gamificacion y metricas.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Resultado de la sesion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /sessions/{sessionId}/abandon:
+    post:
+      tags: [Sesiones]
+      operationId: abandonSession
+      summary: Abandonar la sesion (BACK-13)
+      description: No actualiza el perfil de desempeno. Los intentos ya registrados quedan en el historial.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '204':
+          description: Sesion marcada como abandonada
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /sessions/{sessionId}/result:
+    get:
+      tags: [Sesiones]
+      operationId: getSessionResult
+      summary: Resultado de una sesion completada (BACK-13)
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Resultado consolidado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /progress/summary:
+    get:
+      tags: [Progreso]
+      operationId: getProgressSummary
+      summary: Resumen de progreso para Inicio y Progreso (BACK-14)
+      responses:
+        '200':
+          description: Resumen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /progress/categories:
+    get:
+      tags: [Progreso]
+      operationId: getCategoryProgress
+      summary: Evolucion por categoria en el tiempo (BACK-14)
+      parameters:
+        - name: granularity
+          in: query
+          schema:
+            type: string
+            enum: [week, month]
+            default: week
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Serie temporal por categoria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryProgress'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /gamification/me:
+    get:
+      tags: [Gamificacion]
+      operationId: getGamificationState
+      summary: XP y nivel general (BACK-18)
+      responses:
+        '200':
+          description: Estado de gamificacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GamificationState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /achievements:
+    get:
+      tags: [Gamificacion]
+      operationId: listAchievements
+      summary: Logros, obtenidos y pendientes (BACK-19)
+      responses:
+        '200':
+          description: Lista de logros
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Achievement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    ValidationError:
+      description: Datos de entrada invalidos
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthorized:
+      description: Falta autenticacion o las credenciales son invalidas
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: Recurso inexistente o de otro usuario
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Conflict:
+      description: Conflicto con el estado actual
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+  schemas:
+    ProblemDetail:
+      type: object
+      required: [title, status, code]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+          example: USERNAME_TAKEN
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    AgeRange:
+      type: string
+      enum: ['18-24', '25-30', '31-40', '41+']
+
+    EducationLevel:
+      type: string
+      nullable: true
+      enum: [SECUNDARIO, TERCIARIO, UNIVERSITARIO_EN_CURSO, UNIVERSITARIO_COMPLETO, POSGRADO]
+
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password, ageRange]
+      properties:
+        username:
+          type: string
+          pattern: '^[a-z0-9_.]{3,30}$'
+          description: Se normaliza a minusculas. No debe ser un dato personal.
+        password:
+          type: string
+          format: password
+          minLength: 10
+          maxLength: 72
+        ageRange:
+          $ref: '#/components/schemas/AgeRange'
+
+    RegisterResponse:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        recoveryCode:
+          type: string
+          nullable: true
+          description: Se muestra una sola vez. Null si la recuperacion de cuenta no esta habilitada.
+          example: 7KQ2M-X9PTD-4HBWE-RC6ZN
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+
+    TokenResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: Segundos hasta el vencimiento
+          example: 86400
+
+    RecoveryResetRequest:
+      type: object
+      additionalProperties: false
+      required: [username, recoveryCode, newPassword]
+      properties:
+        username:
+          type: string
+        recoveryCode:
+          type: string
+        newPassword:
+          type: string
+          format: password
+          minLength: 10
+          maxLength: 72
+
+    RegenerateRecoveryRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          format: password
+
+    RecoveryCodeResponse:
+      type: object
+      required: [recoveryCode]
+      properties:
+        recoveryCode:
+          type: string
+          example: 7KQ2M-X9PTD-4HBWE-RC6ZN
+
+    Profile:
+      type: object
+      required: [ageRange, sessionMinutes, goals, onboardingCompleted, assessmentCompleted]
+      properties:
+        ageRange:
+          $ref: '#/components/schemas/AgeRange'
+        educationLevel:
+          $ref: '#/components/schemas/EducationLevel'
+        sessionMinutes:
+          type: integer
+          minimum: 5
+          maximum: 30
+          default: 10
+        goals:
+          type: array
+          maxItems: 4
+          description: Codigos de categoria que el usuario quiere trabajar
+          items:
+            type: string
+          example: [ATENCION, MEMORIA_TRABAJO]
+        onboardingCompleted:
+          type: boolean
+        assessmentCompleted:
+          type: boolean
+          readOnly: true
+
+    ProfileUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        ageRange:
+          $ref: '#/components/schemas/AgeRange'
+        educationLevel:
+          $ref: '#/components/schemas/EducationLevel'
+        sessionMinutes:
+          type: integer
+          minimum: 5
+          maximum: 30
+        goals:
+          type: array
+          maxItems: 4
+          items:
+            type: string
+        onboardingCompleted:
+          type: boolean
+
+    Category:
+      type: object
+      required: [code, name, mvp]
+      properties:
+        code:
+          type: string
+          example: MEMORIA_TRABAJO
+        name:
+          type: string
+          example: Memoria de trabajo
+        description:
+          type: string
+        mvp:
+          type: boolean
+
+    PerformanceProfile:
+      type: object
+      required: [categories]
+      description: Desempeno dentro de MentIA. No es una medicion clinica de capacidades.
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            required: [category, score, level]
+            properties:
+              category:
+                type: string
+              score:
+                type: number
+                minimum: 0
+                maximum: 100
+              level:
+                type: integer
+                minimum: 1
+                maximum: 10
+              updatedAt:
+                type: string
+                format: date-time
+
+    SessionType:
+      type: string
+      enum: [INITIAL_ASSESSMENT, TRAINING]
+
+    SessionStatus:
+      type: string
+      enum: [GENERATED, IN_PROGRESS, COMPLETED, ABANDONED]
+
+    ExerciseType:
+      type: string
+      enum: [VISUAL_RECOGNITION, SPATIAL_GRID, ODD_ONE_OUT, STROOP, REVERSE_SEQUENCE, N_BACK, AUDITORY_SEQUENCE]
+
+    Modality:
+      type: string
+      enum: [VISUAL, AUDITORY]
+
+    CreateSessionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        durationMinutes:
+          type: integer
+          minimum: 5
+          maximum: 30
+          description: Si se omite, se usa `sessionMinutes` del perfil.
+
+    SessionItem:
+      type: object
+      required: [sessionItemId, position, exerciseCode, exerciseType, category, modality, difficultyLevel, variantKey, seed, params, content, instructions]
+      properties:
+        sessionItemId:
+          type: string
+          format: uuid
+        position:
+          type: integer
+          minimum: 1
+        exerciseCode:
+          type: string
+        exerciseType:
+          $ref: '#/components/schemas/ExerciseType'
+        category:
+          type: string
+        modality:
+          $ref: '#/components/schemas/Modality'
+        difficultyLevel:
+          type: integer
+          minimum: 1
+          maximum: 10
+        variantKey:
+          type: string
+        seed:
+          type: integer
+          format: int64
+          description: Semilla para que el cliente genere los estimulos de forma determinista.
+        params:
+          type: object
+          additionalProperties: true
+          description: Parametros del nivel (longitud, tiempo de exposicion, distractores). Su forma depende de `exerciseType`.
+        content:
+          type: object
+          additionalProperties: true
+          description: Conjunto de estimulos de la variante. Su forma depende de `exerciseType`.
+        instructions:
+          type: string
+
+    RationaleEntry:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [FOCUS_LOWER_PERFORMANCE, LEVEL_UP, LEVEL_KEEP, LEVEL_DOWN, VARIETY_ROTATION]
+        category:
+          type: string
+          nullable: true
+        message:
+          type: string
+          description: Texto en es-AR, sin lenguaje clinico.
+          example: Hoy sumamos mas actividades de memoria de trabajo porque fue donde mas desafio tuviste en tus ultimas sesiones.
+
+    Session:
+      type: object
+      required: [id, type, status, plannedMinutes, estimatedDurationSeconds, items, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/SessionType'
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        plannedMinutes:
+          type: integer
+        estimatedDurationSeconds:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionItem'
+        rationale:
+          type: array
+          description: Motivos de la personalizacion. Vacio en la evaluacion inicial.
+          items:
+            $ref: '#/components/schemas/RationaleEntry'
+        createdAt:
+          type: string
+          format: date-time
+
+    AttemptRequest:
+      type: object
+      additionalProperties: false
+      required: [clientAttemptId, sessionItemId, isCorrect, accuracy, responseTimeMs]
+      properties:
+        clientAttemptId:
+          type: string
+          format: uuid
+          description: Lo genera el cliente para poder reintentar sin duplicar.
+        sessionItemId:
+          type: string
+          format: uuid
+        response:
+          type: object
+          additionalProperties: true
+          description: Respuesta cruda del usuario. Su forma depende del tipo de ejercicio.
+        isCorrect:
+          type: boolean
+        accuracy:
+          type: number
+          minimum: 0
+          maximum: 1
+        responseTimeMs:
+          type: integer
+          minimum: 0
+        metrics:
+          type: object
+          additionalProperties: true
+          description: Datos propios de la mecanica (omisiones, falsos reconocimientos, longitud maxima, etc.).
+
+    AttemptResponse:
+      type: object
+      required: [attemptId, recordedAt]
+      properties:
+        attemptId:
+          type: string
+          format: uuid
+        recordedAt:
+          type: string
+          format: date-time
+
+    CategoryResult:
+      type: object
+      required: [category, itemsCompleted, accuracy, difficultyLevelBefore, difficultyLevelAfter]
+      properties:
+        category:
+          type: string
+        itemsCompleted:
+          type: integer
+        accuracy:
+          type: number
+          minimum: 0
+          maximum: 1
+        avgResponseTimeMs:
+          type: integer
+          nullable: true
+        difficultyLevelBefore:
+          type: integer
+        difficultyLevelAfter:
+          type: integer
+
+    Adaptation:
+      type: object
+      required: [category, from, to, direction]
+      properties:
+        category:
+          type: string
+        from:
+          type: integer
+        to:
+          type: integer
+        direction:
+          type: string
+          enum: [UP, KEEP, DOWN]
+
+    AchievementRef:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+
+    SessionResult:
+      type: object
+      required: [sessionId, type, status, itemsTotal, itemsCompleted, correctCount, errorCount, accuracy, totalTimeMs, categories, adaptations]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/SessionType'
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        itemsTotal:
+          type: integer
+        itemsCompleted:
+          type: integer
+        correctCount:
+          type: integer
+        errorCount:
+          type: integer
+        accuracy:
+          type: number
+          minimum: 0
+          maximum: 1
+        totalTimeMs:
+          type: integer
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryResult'
+        adaptations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Adaptation'
+        comparison:
+          type: object
+          nullable: true
+          description: Comparacion contra la sesion anterior del mismo usuario. Null si no hay sesion previa.
+          properties:
+            previousAccuracy:
+              type: number
+            accuracyDelta:
+              type: number
+        gamification:
+          type: object
+          nullable: true
+          description: Presente cuando la gamificacion esta habilitada.
+          properties:
+            xpEarned:
+              type: integer
+            xpTotal:
+              type: integer
+            level:
+              type: integer
+            leveledUp:
+              type: boolean
+            unlockedAchievements:
+              type: array
+              items:
+                $ref: '#/components/schemas/AchievementRef'
+
+    SessionSummary:
+      type: object
+      required: [id, type, status, itemsCompleted, totalTimeMs]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/SessionType'
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        accuracy:
+          type: number
+          nullable: true
+        itemsCompleted:
+          type: integer
+        totalTimeMs:
+          type: integer
+
+    SessionHistoryPage:
+      type: object
+      required: [items, page, size, totalElements]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionSummary'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+
+    ProgressSummary:
+      type: object
+      required: [sessionsCompleted, sessionsAbandoned, activeDaysLast30]
+      properties:
+        sessionsCompleted:
+          type: integer
+        sessionsAbandoned:
+          type: integer
+        activeDaysLast30:
+          type: integer
+        lastSessionAt:
+          type: string
+          format: date-time
+          nullable: true
+        currentStreakDays:
+          type: integer
+          nullable: true
+          description: Null si las rachas no estan habilitadas.
+        dailyGoal:
+          type: object
+          nullable: true
+          description: Null si el objetivo diario no esta habilitado.
+          properties:
+            target:
+              type: integer
+            completedToday:
+              type: integer
+        gamification:
+          $ref: '#/components/schemas/GamificationState'
+
+    CategoryProgress:
+      type: object
+      required: [category, points]
+      properties:
+        category:
+          type: string
+        points:
+          type: array
+          items:
+            type: object
+            required: [periodStart, accuracy, avgDifficultyLevel, sessions]
+            properties:
+              periodStart:
+                type: string
+                format: date
+              accuracy:
+                type: number
+              avgDifficultyLevel:
+                type: number
+              sessions:
+                type: integer
+
+    GamificationState:
+      type: object
+      required: [xp, level, xpIntoLevel, xpForNextLevel]
+      properties:
+        xp:
+          type: integer
+        level:
+          type: integer
+        xpIntoLevel:
+          type: integer
+        xpForNextLevel:
+          type: integer
+
+    Achievement:
+      type: object
+      required: [code, name, description, unlocked]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        unlocked:
+          type: boolean
+        unlockedAt:
+          type: string
+          format: date-time
+          nullable: true
