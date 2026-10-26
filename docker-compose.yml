@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: mentia-db
+    environment:
+      POSTGRES_DB: ${MENTIA_DB_NAME:-mentia}
+      POSTGRES_USER: ${MENTIA_DB_USER:-mentia}
+      POSTGRES_PASSWORD: ${MENTIA_DB_PASSWORD:?Definir MENTIA_DB_PASSWORD en .env (ver .env.example)}
+    ports:
+      - "5432:5432"
+    volumes:
+      - mentia-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mentia-db-data:

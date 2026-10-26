@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: mentia-api
+  profiles:
+    default: dev
+  datasource:
+    url: ${MENTIA_DB_URL:jdbc:postgresql://localhost:5432/mentia}
+    username: ${MENTIA_DB_USER:mentia}
+    password: ${MENTIA_DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+    time-zone: UTC
+
+mentia:
+  security:
+    jwt-secret: ${MENTIA_JWT_SECRET}
+  # Umbrales y pesos del motor (docs/plan-backend.md, sección 7). Se completa en BACK-10.
+  engine: {}
