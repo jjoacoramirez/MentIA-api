@@ -1,6 +1,7 @@
 package com.mentia.common.error;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 
 @RestControllerAdvice
@@ -50,9 +52,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        List<ProblemDetails.FieldError> errors = ex.getCause() instanceof UnrecognizedPropertyException unknown
-                ? List.of(new ProblemDetails.FieldError(unknown.getPropertyName(), "Propiedad no permitida."))
-                : List.of();
+        List<ProblemDetails.FieldError> errors;
+        if (ex.getCause() instanceof UnrecognizedPropertyException unknown) {
+            errors = List.of(new ProblemDetails.FieldError(unknown.getPropertyName(), "Propiedad no permitida."));
+        } else if (ex.getCause() instanceof JsonMappingException mapping && !mapping.getPath().isEmpty()) {
+            // Por ejemplo, un valor de enum inexistente: se informa el campo, nunca el valor recibido.
+            errors = List.of(new ProblemDetails.FieldError(fieldPath(mapping), "Valor no válido."));
+        } else {
+            errors = List.of();
+        }
         ProblemDetail problem = ProblemDetails.validation("El cuerpo de la solicitud no es válido.", errors);
         return handleExceptionInternal(ex, problem, headers, HttpStatus.BAD_REQUEST, request);
     }
@@ -68,6 +76,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             problem.setProperty(ProblemDetails.CODE, defaultCodeFor(statusCode).name());
         }
         return super.handleExceptionInternal(ex, body, headers, statusCode, request);
+    }
+
+    private static String fieldPath(JsonMappingException ex) {
+        return ex.getPath().stream()
+                .map(ref -> ref.getFieldName() != null ? ref.getFieldName() : "[" + ref.getIndex() + "]")
+                .collect(Collectors.joining("."));
     }
 
     private static ErrorCode defaultCodeFor(HttpStatusCode status) {
