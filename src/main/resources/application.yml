@@ -26,5 +26,8 @@ spring:
 mentia:
   security:
     jwt-secret: ${MENTIA_JWT_SECRET}
+    jwt-ttl: 24h
+    # Limpieza de la denylist de tokens (los vencidos ya no hace falta guardarlos).
+    revoked-token-cleanup-cron: "0 0 * * * *"
   # Umbrales y pesos del motor (docs/plan-backend.md, sección 7). Se completa en BACK-10.
   engine: {}

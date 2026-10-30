@@ -1,14 +1,21 @@
 package com.mentia.auth;
 
 import com.mentia.auth.domain.User;
+import com.mentia.auth.dto.LoginRequest;
 import com.mentia.auth.dto.RegisterRequest;
 import com.mentia.auth.dto.RegisterResponse;
+import com.mentia.auth.dto.TokenResponse;
 import com.mentia.common.error.ApiException;
 import com.mentia.common.error.ErrorCode;
 import com.mentia.profile.ProfileService;
+import com.mentia.security.AuthenticatedUser;
+import com.mentia.security.JwtService;
+import com.mentia.security.TokenRevocationService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,18 +26,29 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private static final String USERNAME_TAKEN_DETAIL = "Ese nombre de usuario ya está en uso. Probá con otro.";
+    private static final String INVALID_CREDENTIALS_DETAIL = "El nombre de usuario o la contraseña no son correctos.";
 
     private final UserRepository userRepository;
     private final ProfileService profileService;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+    private final TokenRevocationService revocationService;
     private final Clock clock;
 
+    // Hash contra el que se compara cuando el username no existe, para que la respuesta tarde lo mismo
+    // y no se pueda averiguar qué usernames están registrados.
+    private final String dummyPasswordHash;
+
     public AuthService(UserRepository userRepository, ProfileService profileService,
-                       PasswordEncoder passwordEncoder, Clock clock) {
+                       PasswordEncoder passwordEncoder, JwtService jwtService,
+                       TokenRevocationService revocationService, Clock clock) {
         this.userRepository = userRepository;
         this.profileService = profileService;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.revocationService = revocationService;
         this.clock = clock;
+        this.dummyPasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
     @Transactional
@@ -51,6 +69,23 @@ public class AuthService {
 
         profileService.createInitialProfile(user.getId(), request.ageRange());
         return new RegisterResponse(user.getId(), null);
+    }
+
+    /** Mismo error y mismo costo exista o no el username. */
+    @Transactional(readOnly = true)
+    public TokenResponse login(LoginRequest request) {
+        Optional<User> user = userRepository.findByUsername(normalizeUsername(request.username()));
+        String hash = user.map(User::getPasswordHash).orElse(dummyPasswordHash);
+        boolean passwordMatches = passwordEncoder.matches(request.password(), hash);
+        if (user.isEmpty() || !passwordMatches) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, INVALID_CREDENTIALS_DETAIL);
+        }
+        JwtService.IssuedToken token = jwtService.issue(user.get().getId());
+        return TokenResponse.bearer(token.token(), token.expiresInSeconds());
+    }
+
+    public void logout(AuthenticatedUser user) {
+        revocationService.revoke(user.jti(), user.expiresAt());
     }
 
     private static ApiException usernameTaken() {
