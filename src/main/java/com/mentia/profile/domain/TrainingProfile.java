@@ -44,6 +44,10 @@ public class TrainingProfile implements Persistable<UUID> {
     @Column(name = "onboarding_completed", nullable = false)
     private boolean onboardingCompleted;
 
+    // Primera vez que se completó el onboarding: el evento se publica una sola vez aunque el flag cambie después.
+    @Column(name = "onboarding_completed_at")
+    private Instant onboardingCompletedAt;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -62,6 +66,39 @@ public class TrainingProfile implements Persistable<UUID> {
         profile.onboardingCompleted = false;
         profile.updatedAt = now;
         return profile;
+    }
+
+    public void changeAgeRange(AgeRange ageRange) {
+        this.ageRange = ageRange;
+    }
+
+    /** {@code null} borra el nivel educativo. */
+    public void changeEducationLevel(EducationLevel educationLevel) {
+        this.educationLevel = educationLevel;
+    }
+
+    public void changeSessionMinutes(int sessionMinutes) {
+        this.sessionMinutes = (short) sessionMinutes;
+    }
+
+    public void changeGoals(List<String> goals) {
+        this.goals = new ArrayList<>(goals);
+    }
+
+    /**
+     * @return {@code true} si es la primera vez que se completa el onboarding.
+     */
+    public boolean changeOnboardingCompleted(boolean completed, Instant now) {
+        this.onboardingCompleted = completed;
+        if (completed && onboardingCompletedAt == null) {
+            onboardingCompletedAt = now;
+            return true;
+        }
+        return false;
+    }
+
+    public void touch(Instant now) {
+        this.updatedAt = now;
     }
 
     @Override

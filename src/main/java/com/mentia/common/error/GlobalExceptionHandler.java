@@ -31,6 +31,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, problem, new HttpHeaders(), ex.getStatus(), request);
     }
 
+    @ExceptionHandler(FieldValidationException.class)
+    ResponseEntity<Object> handleFieldValidation(FieldValidationException ex, WebRequest request) {
+        ProblemDetail problem = ProblemDetails.validation("Hay datos de entrada inválidos.",
+                List.of(new ProblemDetails.FieldError(ex.getField(), ex.getMessage())));
+        return handleExceptionInternal(ex, problem, new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
+    }
+
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> handleUnexpected(Exception ex, WebRequest request) {
         log.error("Error no controlado", ex);
