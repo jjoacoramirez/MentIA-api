@@ -1,5 +1,6 @@
 package com.mentia.catalog;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -10,4 +11,6 @@ import com.mentia.catalog.domain.Category;
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
 
     Optional<Category> findByCode(String code);
+
+    List<Category> findByActiveTrueOrderByMvpDescNameAsc();
 }

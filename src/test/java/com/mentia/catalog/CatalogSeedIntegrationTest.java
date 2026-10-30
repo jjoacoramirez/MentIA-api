@@ -58,10 +58,25 @@ class CatalogSeedIntegrationTest extends IntegrationTest {
 
     @Test
     void filtraEjerciciosActivosPorCategoria() {
-        assertThat(exercises.findByCategoryCodeAndActiveTrue("MEMORIA_TRABAJO"))
+        assertThat(exercises.findActiveByCategoryCode("MEMORIA_TRABAJO"))
                 .extracting(Exercise::getType)
                 .containsExactlyInAnyOrder(ExerciseType.REVERSE_SEQUENCE, ExerciseType.N_BACK);
-        assertThat(exercises.findByCategoryCodeAndActiveTrue("MEMORIA_AUDITIVA")).isEmpty();
+        assertThat(exercises.findActiveByCategoryCode("MEMORIA_AUDITIVA")).isEmpty();
+    }
+
+    @Test
+    void ningunEjercicioActivoQuedaEnUnaCategoriaInactiva() {
+        assertThat(exercises.findActiveWithInactiveCategory()).isEmpty();
+    }
+
+    @Test
+    void unEjercicioActivoDeCategoriaInactivaNoSeDevuelve() {
+        jdbc.update("UPDATE categories SET active = false WHERE code = 'ATENCION'");
+
+        assertThat(exercises.findActiveByCategoryCode("ATENCION")).isEmpty();
+        assertThat(exercises.findActiveWithInactiveCategory())
+                .extracting(Exercise::getType)
+                .containsExactlyInAnyOrder(ExerciseType.ODD_ONE_OUT, ExerciseType.STROOP);
     }
 
     @Test
