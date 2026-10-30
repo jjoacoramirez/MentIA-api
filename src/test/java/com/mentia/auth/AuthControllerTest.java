@@ -3,9 +3,9 @@ package com.mentia.auth;
 import static com.mentia.support.Contract.matchesContract;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,6 +20,8 @@ import com.mentia.common.error.ApiException;
 import com.mentia.common.error.ErrorCode;
 import com.mentia.profile.domain.AgeRange;
 import com.mentia.auth.dto.LoginRequest;
+import com.mentia.auth.dto.RecoveryCodeResponse;
+import com.mentia.auth.dto.RecoveryResetRequest;
 import com.mentia.auth.dto.TokenResponse;
 import com.mentia.security.AuthenticatedUser;
 import com.mentia.support.WebLayerTest;
@@ -46,16 +48,19 @@ class AuthControllerTest extends WebLayerTest {
     @MockitoBean
     private AuthService authService;
 
+    @MockitoBean
+    private RecoveryService recoveryService;
+
     @Test
     void registraYDevuelve201ConElContrato() throws Exception {
         UUID userId = UUID.randomUUID();
-        given(authService.register(any())).willReturn(new RegisterResponse(userId, null));
+        given(authService.register(any())).willReturn(new RegisterResponse(userId, "7KQ2M-X9PTD-4HBWE-RC6ZN"));
 
         register("""
                 {"username": "lector_nocturno", "password": "una-clave-larga", "ageRange": "18-24"}""")
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.userId").value(userId.toString()))
-                .andExpect(jsonPath("$.recoveryCode").value(nullValue()))
+                .andExpect(jsonPath("$.recoveryCode").value("7KQ2M-X9PTD-4HBWE-RC6ZN"))
                 .andExpect(matchesContract());
 
         verify(authService).register(new RegisterRequest("lector_nocturno", "una-clave-larga", AgeRange.FROM_18_TO_24));
@@ -194,6 +199,71 @@ class AuthControllerTest extends WebLayerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
         verify(authService, never()).logout(any());
+    }
+
+    @Test
+    void resetEsPublicoYDevuelveElCodigoNuevoConElContrato() throws Exception {
+        given(recoveryService.reset(any())).willReturn(new RecoveryCodeResponse("ABCDE-FGHJK-LMNPQ-RSTUV"));
+
+        mockMvc.perform(post("/api/v1/auth/recovery/reset").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"username": "lector", "recoveryCode": "7KQ2M-X9PTD-4HBWE-RC6ZN", "newPassword": "otra-clave-larga"}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recoveryCode").value("ABCDE-FGHJK-LMNPQ-RSTUV"))
+                .andExpect(matchesContract());
+
+        verify(recoveryService).reset(new RecoveryResetRequest("lector", "7KQ2M-X9PTD-4HBWE-RC6ZN", "otra-clave-larga"));
+    }
+
+    @Test
+    void resetFallidoDevuelveErrorGenericoConElContrato() throws Exception {
+        given(recoveryService.reset(any())).willThrow(new ApiException(HttpStatus.BAD_REQUEST,
+                ErrorCode.INVALID_RECOVERY, "No pudimos restablecer la contraseña con esos datos."));
+
+        mockMvc.perform(post("/api/v1/auth/recovery/reset").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"username": "lector", "recoveryCode": "XXXXX-XXXXX-XXXXX-XXXXX", "newPassword": "otra-clave-larga"}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_RECOVERY"))
+                .andExpect(matchesContract());
+    }
+
+    @Test
+    void resetConContrasenaNuevaDebilDevuelve400SinTocarLaCuenta() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/recovery/reset").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"username": "lector", "recoveryCode": "7KQ2M-X9PTD-4HBWE-RC6ZN", "newPassword": "corta"}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].field").value("newPassword"));
+        verify(recoveryService, never()).reset(any());
+    }
+
+    @Test
+    void regenerarRequiereSesionYDevuelveElCodigoConElContrato() throws Exception {
+        UUID userId = UUID.randomUUID();
+        given(recoveryService.regenerate(userId, "una-clave-larga"))
+                .willReturn(new RecoveryCodeResponse("ABCDE-FGHJK-LMNPQ-RSTUV"));
+
+        mockMvc.perform(post("/api/v1/auth/recovery/regenerate").with(authenticatedAs(userId))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\": \"una-clave-larga\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recoveryCode").value("ABCDE-FGHJK-LMNPQ-RSTUV"))
+                .andExpect(matchesContract());
+
+        mockMvc.perform(post("/api/v1/auth/recovery/regenerate")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\": \"una-clave-larga\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void regenerarConContrasenaIncorrectaDevuelve401ConElContrato() throws Exception {
+        UUID userId = UUID.randomUUID();
+        given(recoveryService.regenerate(eq(userId), any())).willThrow(new ApiException(HttpStatus.UNAUTHORIZED,
+                ErrorCode.INVALID_CREDENTIALS, "La contraseña no es correcta."));
+
+        mockMvc.perform(post("/api/v1/auth/recovery/regenerate").with(authenticatedAs(userId))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\": \"otra-clave\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+                .andExpect(matchesContract());
     }
 
     private ResultActions login(String body) throws Exception {

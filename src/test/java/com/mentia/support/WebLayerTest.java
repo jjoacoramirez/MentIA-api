@@ -33,7 +33,7 @@ public abstract class WebLayerTest {
 
     protected AuthenticatedUser principalFor(UUID userId) {
         Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-        return new AuthenticatedUser(userId, "jti-" + userId, now, now.plus(1, ChronoUnit.DAYS));
+        return new AuthenticatedUser(userId, "jti-" + userId, now, now.plus(1, ChronoUnit.DAYS), 0);
     }
 
     /** Agrega un Bearer que el filtro JWT acepta como el usuario indicado. */

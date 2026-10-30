@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.mentia.auth.AuthController;
 import com.mentia.auth.AuthService;
+import com.mentia.auth.RecoveryService;
 import com.mentia.support.WebLayerTest;
 
 @WebMvcTest(AuthController.class)
@@ -30,6 +31,9 @@ class SecurityConfigTest extends WebLayerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private RecoveryService recoveryService;
 
     @Test
     void endpointProtegidoSinTokenDevuelve401ComoProblemDetail() throws Exception {
@@ -60,7 +64,7 @@ class SecurityConfigTest extends WebLayerTest {
     void tokenRevocadoDevuelve401() throws Exception {
         UUID userId = UUID.randomUUID();
         var request = post("/api/v1/auth/logout").with(authenticatedAs(userId));
-        given(revocationService.isRevoked("jti-" + userId)).willReturn(true);
+        given(revocationService.isRevoked(principalFor(userId))).willReturn(true);
 
         mockMvc.perform(request)
                 .andExpect(status().isUnauthorized())

@@ -22,10 +22,11 @@ class JwtServiceTest {
     void elTokenEmitidoSeValidaConSusClaims() {
         UUID userId = UUID.randomUUID();
 
-        JwtService.IssuedToken issued = service.issue(userId);
+        JwtService.IssuedToken issued = service.issue(userId, 3);
 
         AuthenticatedUser user = service.parse(issued.token()).orElseThrow();
         assertThat(user.userId()).isEqualTo(userId);
+        assertThat(user.tokenVersion()).isEqualTo(3);
         assertThat(user.jti()).isNotBlank();
         assertThat(user.issuedAt()).isEqualTo(NOW);
         assertThat(user.expiresAt()).isEqualTo(NOW.plus(Duration.ofHours(24)));
@@ -35,27 +36,27 @@ class JwtServiceTest {
     @Test
     void cadaTokenTieneUnJtiDistinto() {
         UUID userId = UUID.randomUUID();
-        String first = service.parse(service.issue(userId).token()).orElseThrow().jti();
-        String second = service.parse(service.issue(userId).token()).orElseThrow().jti();
+        String first = service.parse(service.issue(userId, 0).token()).orElseThrow().jti();
+        String second = service.parse(service.issue(userId, 0).token()).orElseThrow().jti();
         assertThat(first).isNotEqualTo(second);
     }
 
     @Test
     void unTokenVencidoSeRechaza() {
-        String token = service.issue(UUID.randomUUID()).token();
+        String token = service.issue(UUID.randomUUID(), 0).token();
         JwtService later = jwtAt(NOW.plus(Duration.ofHours(25)), SECRET);
         assertThat(later.parse(token)).isEmpty();
     }
 
     @Test
     void unTokenFirmadoConOtroSecretoSeRechaza() {
-        String token = jwtAt(NOW, "otro-secreto-de-prueba-con-mas-de-32-bytes").issue(UUID.randomUUID()).token();
+        String token = jwtAt(NOW, "otro-secreto-de-prueba-con-mas-de-32-bytes").issue(UUID.randomUUID(), 0).token();
         assertThat(service.parse(token)).isEmpty();
     }
 
     @Test
     void unTokenAlteradoSeRechaza() {
-        String token = service.issue(UUID.randomUUID()).token();
+        String token = service.issue(UUID.randomUUID(), 0).token();
         String[] parts = token.split("\\.");
         String tampered = parts[0] + "." + parts[1] + "x." + parts[2];
         assertThat(service.parse(tampered)).isEmpty();

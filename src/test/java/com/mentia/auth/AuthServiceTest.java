@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -42,6 +43,7 @@ class AuthServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-10-20T12:00:00Z");
     private static final String PASSWORD = "una-clave-larga";
+    private static final String RECOVERY_CODE = "7KQ2M-X9PTD-4HBWE-RC6ZN";
 
     @Mock
     private UserRepository userRepository;
@@ -51,6 +53,9 @@ class AuthServiceTest {
 
     @Mock
     private TokenRevocationService revocationService;
+
+    @Mock
+    private RecoveryService recoveryService;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
 
@@ -63,7 +68,8 @@ class AuthServiceTest {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         jwtService = new JwtService(new SecurityProperties("s".repeat(40), Duration.ofHours(24)), clock);
         authService = new AuthService(userRepository, profileService, passwordEncoder, jwtService,
-                revocationService, clock);
+                revocationService, recoveryService, clock);
+        lenient().when(recoveryService.newCode()).thenReturn(new RecoveryService.NewCode(RECOVERY_CODE, "hash-del-codigo"));
     }
 
     @Test
@@ -85,7 +91,19 @@ class AuthServiceTest {
         assertThat(passwordEncoder.matches(PASSWORD, saved.getValue().getPasswordHash())).isTrue();
 
         assertThat(response.userId()).isEqualTo(id);
-        assertThat(response.recoveryCode()).isNull();
+        assertThat(response.recoveryCode()).as("se muestra una sola vez").isEqualTo(RECOVERY_CODE);
+        assertThat(saved.getValue().getRecoveryCodeHash()).as("se guarda solo el hash").isEqualTo("hash-del-codigo");
+    }
+
+    @Test
+    void elTokenLlevaLaVersionVigenteDelUsuario() {
+        User user = existingUser("lector");
+        given(revocationService.currentVersion(user.getId())).willReturn(2);
+
+        TokenResponse response = authService.login(new LoginRequest("lector", PASSWORD));
+
+        assertThat(jwtService.parse(response.accessToken())).get()
+                .extracting(AuthenticatedUser::tokenVersion).isEqualTo(2);
     }
 
     @Test
@@ -149,7 +167,7 @@ class AuthServiceTest {
 
     @Test
     void logoutRevocaElJtiHastaQueVence() {
-        AuthenticatedUser user = new AuthenticatedUser(UUID.randomUUID(), "jti-1", NOW, NOW.plusSeconds(3600));
+        AuthenticatedUser user = new AuthenticatedUser(UUID.randomUUID(), "jti-1", NOW, NOW.plusSeconds(3600), 0);
 
         authService.logout(user);
 
@@ -166,7 +184,8 @@ class AuthServiceTest {
     }
 
     private User existingUser(String username) {
-        User user = withId(new User(username, passwordEncoder.encode(PASSWORD), NOW), UUID.randomUUID());
+        User user = withId(new User(username, passwordEncoder.encode(PASSWORD), "hash-del-codigo", NOW),
+                UUID.randomUUID());
         given(userRepository.findByUsername(username)).willReturn(Optional.of(user));
         return user;
     }

@@ -36,7 +36,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header != null && header.startsWith(BEARER)) {
             jwtService.parse(header.substring(BEARER.length()).trim())
-                    .filter(user -> !revocationService.isRevoked(user.jti()))
+                    .filter(user -> !revocationService.isRevoked(user))
                     .ifPresent(user -> SecurityContextHolder.getContext().setAuthentication(
                             new UsernamePasswordAuthenticationToken(user, null, List.of())));
         }

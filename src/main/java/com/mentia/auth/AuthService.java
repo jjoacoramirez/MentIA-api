@@ -33,6 +33,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final TokenRevocationService revocationService;
+    private final RecoveryService recoveryService;
     private final Clock clock;
 
     // Hash contra el que se compara cuando el username no existe, para que la respuesta tarde lo mismo
@@ -41,12 +42,13 @@ public class AuthService {
 
     public AuthService(UserRepository userRepository, ProfileService profileService,
                        PasswordEncoder passwordEncoder, JwtService jwtService,
-                       TokenRevocationService revocationService, Clock clock) {
+                       TokenRevocationService revocationService, RecoveryService recoveryService, Clock clock) {
         this.userRepository = userRepository;
         this.profileService = profileService;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.revocationService = revocationService;
+        this.recoveryService = recoveryService;
         this.clock = clock;
         this.dummyPasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
@@ -58,17 +60,18 @@ public class AuthService {
             throw usernameTaken();
         }
 
+        RecoveryService.NewCode recoveryCode = recoveryService.newCode();
         User user;
         try {
-            user = userRepository.saveAndFlush(
-                    new User(username, passwordEncoder.encode(request.password()), Instant.now(clock)));
+            user = userRepository.saveAndFlush(new User(username, passwordEncoder.encode(request.password()),
+                    recoveryCode.hash(), Instant.now(clock)));
         } catch (DataIntegrityViolationException e) {
             // Dos registros simultáneos con el mismo username: gana el primero en llegar a la base.
             throw usernameTaken();
         }
 
         profileService.createInitialProfile(user.getId(), request.ageRange());
-        return new RegisterResponse(user.getId(), null);
+        return new RegisterResponse(user.getId(), recoveryCode.plain());
     }
 
     /** Mismo error y mismo costo exista o no el username. */
@@ -80,7 +83,8 @@ public class AuthService {
         if (user.isEmpty() || !passwordMatches) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, INVALID_CREDENTIALS_DETAIL);
         }
-        JwtService.IssuedToken token = jwtService.issue(user.get().getId());
+        UUID userId = user.get().getId();
+        JwtService.IssuedToken token = jwtService.issue(userId, revocationService.currentVersion(userId));
         return TokenResponse.bearer(token.token(), token.expiresInSeconds());
     }
 

@@ -3,7 +3,12 @@ package com.mentia.auth.dto;
 import java.util.UUID;
 
 /**
- * {@code recoveryCode} es null hasta que se implemente la recuperación de cuenta (BACK-03B).
+ * {@code recoveryCode} se muestra una sola vez: el servidor solo guarda su hash.
  */
 public record RegisterResponse(UUID userId, String recoveryCode) {
+
+    @Override
+    public String toString() {
+        return "RegisterResponse[userId=" + userId + ", recoveryCode=***]";
+    }
 }
