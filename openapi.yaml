@@ -10,7 +10,8 @@ info:
     - Todos los endpoints requieren `Authorization: Bearer <JWT>` salvo los marcados como publicos.
     - Los errores usan `application/problem+json` (RFC 7807) con un campo `code` estable.
     - Codigos de error usados: VALIDATION_ERROR, USERNAME_TAKEN, INVALID_CREDENTIALS, INVALID_RECOVERY,
-      UNAUTHORIZED, ASSESSMENT_REQUIRED, SESSION_NOT_FOUND, SESSION_STATE_INVALID, ITEM_NOT_IN_SESSION.
+      UNAUTHORIZED, ASSESSMENT_REQUIRED, SESSION_NOT_FOUND, SESSION_STATE_INVALID, ITEM_NOT_IN_SESSION,
+      ATTEMPT_CONFLICT.
       Para errores inesperados del servidor se usa ademas INTERNAL_ERROR (500).
     - Los scores y niveles representan desempeno dentro de MentIA. No son mediciones clinicas.
     - Fechas y horas en UTC (ISO 8601).
@@ -339,8 +340,11 @@ paths:
       operationId: recordAttempt
       summary: Registrar el resultado de un item (BACK-12)
       description: |
-        Idempotente por `clientAttemptId`. Si se repite, devuelve 200 con el intento original.
-        La sesion debe estar IN_PROGRESS.
+        Idempotente por `clientAttemptId`. Si se repite, devuelve 200 con el intento original
+        (aunque la sesion ya no este en curso). Para un intento nuevo la sesion debe estar IN_PROGRESS.
+        Errores 409: SESSION_STATE_INVALID (sesion no en curso), ITEM_NOT_IN_SESSION (el item es de otra sesion),
+        ATTEMPT_CONFLICT (el item ya tiene un intento, o el `clientAttemptId` ya se uso para otro item).
+        404 SESSION_NOT_FOUND si la sesion no existe o es de otro usuario.
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
