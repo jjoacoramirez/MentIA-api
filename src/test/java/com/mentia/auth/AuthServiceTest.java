@@ -21,6 +21,7 @@ import com.mentia.security.AuthenticatedUser;
 import com.mentia.security.JwtService;
 import com.mentia.security.SecurityProperties;
 import com.mentia.security.TokenRevocationService;
+import com.mentia.security.Role;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -167,7 +168,7 @@ class AuthServiceTest {
 
     @Test
     void logoutRevocaElJtiHastaQueVence() {
-        AuthenticatedUser user = new AuthenticatedUser(UUID.randomUUID(), "jti-1", NOW, NOW.plusSeconds(3600), 0);
+        AuthenticatedUser user = new AuthenticatedUser(UUID.randomUUID(), "jti-1", NOW, NOW.plusSeconds(3600), 0, Role.USER);
 
         authService.logout(user);
 

@@ -1,7 +1,9 @@
 package com.mentia.session.domain;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -83,11 +85,9 @@ public class TrainingSession {
     }
 
     /** Agrega un ítem al final; la posición se asigna en orden (1, 2, 3...). */
-    public SessionItem addItem(UUID exerciseId, UUID variantId, UUID categoryId, int difficultyLevel, long seed,
-            Map<String, Object> params) {
+    public SessionItem addItem(PlannedItem planned) {
         requireStatus(SessionStatus.GENERATED);
-        SessionItem item = new SessionItem(this, items.size() + 1, exerciseId, variantId, categoryId,
-                difficultyLevel, seed, params);
+        SessionItem item = new SessionItem(this, items.size() + 1, planned);
         items.add(item);
         return item;
     }
@@ -97,6 +97,33 @@ public class TrainingSession {
         requireStatus(SessionStatus.GENERATED);
         status = SessionStatus.IN_PROGRESS;
         startedAt = now;
+    }
+
+    /** {@code IN_PROGRESS → COMPLETED}, guardando el snapshot del resultado. */
+    public void complete(Instant now, Map<String, Object> result) {
+        requireStatus(SessionStatus.IN_PROGRESS);
+        status = SessionStatus.COMPLETED;
+        finishedAt = now;
+        // No Map.copyOf: el snapshot puede tener valores null (por ejemplo, comparison sin sesión previa).
+        this.result = new LinkedHashMap<>(result);
+    }
+
+    /** Una sesión abierta ({@code GENERATED} o {@code IN_PROGRESS}) pasa a {@code ABANDONED}. */
+    public void abandon(Instant now) {
+        if (!isOpen()) {
+            throw new IllegalStateException("La sesión " + id + " ya está cerrada (" + status + ")");
+        }
+        status = SessionStatus.ABANDONED;
+        finishedAt = now;
+    }
+
+    public boolean isOpen() {
+        return status == SessionStatus.GENERATED || status == SessionStatus.IN_PROGRESS;
+    }
+
+    /** Abierta y creada hace más de {@code staleAfter}: ya no se retoma, se abandona. */
+    public boolean isStale(Instant now, Duration staleAfter) {
+        return isOpen() && createdAt.plus(staleAfter).isBefore(now);
     }
 
     public boolean isOwnedBy(UUID userId) {

@@ -10,6 +10,7 @@ import com.mentia.common.error.ErrorCode;
 import com.mentia.profile.ProfileService;
 import com.mentia.security.AuthenticatedUser;
 import com.mentia.security.JwtService;
+import com.mentia.security.Role;
 import com.mentia.security.TokenRevocationService;
 import java.time.Clock;
 import java.time.Instant;
@@ -84,8 +85,9 @@ public class AuthService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, INVALID_CREDENTIALS_DETAIL);
         }
         UUID userId = user.get().getId();
-        JwtService.IssuedToken token = jwtService.issue(userId, revocationService.currentVersion(userId));
-        return TokenResponse.bearer(token.token(), token.expiresInSeconds());
+        Role role = user.get().getRole();
+        JwtService.IssuedToken token = jwtService.issue(userId, revocationService.currentVersion(userId), role);
+        return TokenResponse.bearer(token.token(), token.expiresInSeconds(), role);
     }
 
     public void logout(AuthenticatedUser user) {

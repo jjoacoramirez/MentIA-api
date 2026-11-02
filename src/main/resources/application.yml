@@ -35,7 +35,23 @@ mentia:
       max-attempts: 5
       lockout: 15m
   # Umbrales y pesos del motor (docs/plan-backend.md, sección 7). Se completa en BACK-10.
+  session:
+    # Una sesión GENERATED o IN_PROGRESS más vieja que esto se abandona al pedir una nueva.
+    stale-after: 12h
   engine:
+    # Nivel de los ítems de la evaluación inicial y rango de niveles.
+    initial-level: 3
+    level-min: 1
+    level-max: 10
+    assessment:
+      exercises-per-category: 2
+      # Nivel inicial según la precisión promedio por categoría: se toma el primer umbral alcanzado.
+      initial-levels:
+        - { min-accuracy: 0.90, level: 5 }
+        - { min-accuracy: 0.75, level: 4 }
+        - { min-accuracy: 0.60, level: 3 }
+        - { min-accuracy: 0.40, level: 2 }
+        - { min-accuracy: 0.00, level: 1 }
     rotation:
       # Cuántas sesiones hacia atrás se miran para penalizar lo usado recientemente.
       lookback-sessions: 5

@@ -54,19 +54,34 @@ public class SessionItem {
     @Column(name = "params", nullable = false)
     private Map<String, Object> params;
 
+    @Column(name = "estimated_seconds", nullable = false)
+    private int estimatedSeconds;
+
+    @Column(name = "target_response_ms")
+    private Integer targetResponseMs;
+
     protected SessionItem() {
     }
 
-    SessionItem(TrainingSession session, int position, UUID exerciseId, UUID variantId, UUID categoryId,
-            int difficultyLevel, long seed, Map<String, Object> params) {
+    SessionItem(TrainingSession session, int position, PlannedItem planned) {
         this.session = session;
         this.position = (short) position;
-        this.exerciseId = exerciseId;
-        this.variantId = variantId;
-        this.categoryId = categoryId;
-        this.difficultyLevel = (short) difficultyLevel;
-        this.seed = seed;
-        this.params = Map.copyOf(params);
+        this.exerciseId = planned.exerciseId();
+        this.variantId = planned.variantId();
+        this.categoryId = planned.categoryId();
+        this.difficultyLevel = (short) planned.difficultyLevel();
+        this.seed = planned.seed();
+        this.params = Map.copyOf(planned.params());
+        this.estimatedSeconds = planned.estimatedSeconds();
+        this.targetResponseMs = planned.targetResponseMs();
+    }
+
+    public int getEstimatedSeconds() {
+        return estimatedSeconds;
+    }
+
+    public Integer getTargetResponseMs() {
+        return targetResponseMs;
     }
 
     public UUID getId() {

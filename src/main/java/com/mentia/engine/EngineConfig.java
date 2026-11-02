@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(RotationProperties.class)
+@EnableConfigurationProperties({ EngineProperties.class, RotationProperties.class })
 public class EngineConfig {
 
     @Bean

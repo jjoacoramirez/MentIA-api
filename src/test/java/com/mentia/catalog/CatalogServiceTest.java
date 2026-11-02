@@ -31,12 +31,15 @@ class CatalogServiceTest {
     @Mock
     ExerciseVariantRepository variantRepository;
 
+    @Mock
+    ExerciseLevelRepository levelRepository;
+
     @Test
     void devuelveCategoriasActivasComoDto() {
         given(categoryRepository.findByActiveTrueOrderByMvpDescNameAsc())
                 .willReturn(List.of(category("ATENCION", "Atención", true), category("MEMORIA_VISUAL", "Memoria visual", true)));
 
-        CatalogService service = new CatalogService(categoryRepository, exerciseRepository, variantRepository);
+        CatalogService service = new CatalogService(categoryRepository, exerciseRepository, variantRepository, levelRepository);
 
         assertThat(service.activeCategories()).containsExactly(
                 new CategoryResponse("ATENCION", "Atención", "desc", true),
@@ -50,7 +53,7 @@ class CatalogServiceTest {
         Exercise stroop = exercise("STROOP", ExerciseType.STROOP, attention);
         given(exerciseRepository.findActiveByCategoryCode("ATENCION")).willReturn(List.of(stroop));
 
-        List<ExerciseDefinition> result = new CatalogService(categoryRepository, exerciseRepository, variantRepository)
+        List<ExerciseDefinition> result = new CatalogService(categoryRepository, exerciseRepository, variantRepository, levelRepository)
                 .activeExercises("ATENCION");
 
         assertThat(result).singleElement().satisfies(e -> {

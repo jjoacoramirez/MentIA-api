@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.mentia.session.domain.PlannedItem;
 import com.mentia.session.domain.SessionType;
 import com.mentia.session.domain.TrainingSession;
 
@@ -35,17 +36,7 @@ public class SessionFactory {
             throw new IllegalArgumentException("Una sesión necesita al menos un ítem");
         }
         TrainingSession session = TrainingSession.generate(userId, type, plannedMinutes, rationale, Instant.now(clock));
-        items.forEach(i -> session.addItem(i.exerciseId(), i.variantId(), i.categoryId(), i.difficultyLevel(),
-                i.seed(), i.params()));
+        items.forEach(session::addItem);
         return repository.saveAndFlush(session);
-    }
-
-    public record PlannedItem(
-            UUID exerciseId,
-            UUID variantId,
-            UUID categoryId,
-            int difficultyLevel,
-            long seed,
-            Map<String, Object> params) {
     }
 }

@@ -173,6 +173,12 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - Si ya hay una evaluación `GENERATED` o `IN_PROGRESS`, la devuelve (`200`) para poder retomar. Con `restart=true` abandona la anterior y crea una nueva.
 - El cierre usa `SessionService.complete` con una implementación mínima: calcula el nivel inicial por categoría según `accuracy` (tabla de la sección 7) y publica `assessment_completed`. BACK-13 completa el cierre general.
 - Sin interpretación médica en ningún texto de respuesta.
+- Decisiones tomadas al implementarlo:
+  - La tabla `performance_profiles` se crea en este ticket con el nivel inicial. BACK-08 suma la actualización por sesión y `GET /profile/performance`.
+  - Este ticket incluye `POST /sessions/{id}/start` y un `POST /sessions/{id}/complete` mínimo, para que la evaluación se pueda usar de punta a punta. BACK-09 y BACK-13 los completan para sesiones de entrenamiento.
+  - Cada ítem de la evaluación usa la primera variante activa del ejercicio, así la evaluación es comparable entre usuarios.
+  - Una categoría sin intentos al cerrar cuenta como precisión 0, es decir, nivel 1.
+  - **Saltear la evaluación es solo para admins (debug):** `POST /assessment/skip` deja `level-min` en todas las categorías del MVP. No marca la evaluación como completada. El rol `ADMIN` se asigna a mano en la base.
 
 ### BACK-11 Motor de rotación (SCRUM-25)
 - `RotationPolicy` aplicado a ejercicios y variantes. Reglas en la sección 7. Implementa `VariantSelector` de BACK-05.

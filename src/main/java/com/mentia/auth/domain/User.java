@@ -2,6 +2,8 @@ package com.mentia.auth.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -9,6 +11,8 @@ import jakarta.persistence.Table;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+
+import com.mentia.security.Role;
 
 /**
  * Usuario seudonimizado: no tiene nombre real, email ni ningún otro dato personal.
@@ -39,6 +43,11 @@ public class User {
     @Column(name = "recovery_locked_until")
     private Instant recoveryLockedUntil;
 
+    // Todo usuario nace USER; ADMIN se asigna a mano en la base (ver README).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false)
+    private Role role = Role.USER;
+
     protected User() {
     }
 
@@ -47,6 +56,10 @@ public class User {
         this.passwordHash = passwordHash;
         this.recoveryCodeHash = recoveryCodeHash;
         this.createdAt = createdAt;
+    }
+
+    public Role getRole() {
+        return role;
     }
 
     public void changePassword(String passwordHash) {

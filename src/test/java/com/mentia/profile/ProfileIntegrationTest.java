@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mentia.security.JwtService;
 import com.mentia.support.IntegrationTest;
+import com.mentia.security.Role;
 
 @RecordApplicationEvents
 class ProfileIntegrationTest extends IntegrationTest {
@@ -80,7 +81,7 @@ class ProfileIntegrationTest extends IntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         UUID userId = UUID.fromString(objectMapper.readTree(body).get("userId").asText());
-        return jwtService.issue(userId, 0).token();
+        return jwtService.issue(userId, 0, Role.USER).token();
     }
 
     private static MockHttpServletRequestBuilder auth(MockHttpServletRequestBuilder builder, String token) {

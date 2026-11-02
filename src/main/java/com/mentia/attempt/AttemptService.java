@@ -2,14 +2,17 @@ package com.mentia.attempt;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.mentia.attempt.domain.Attempt;
+import com.mentia.attempt.dto.AttemptOutcome;
 import com.mentia.attempt.dto.AttemptRequest;
 import com.mentia.attempt.dto.AttemptResponse;
 import com.mentia.common.error.ApiException;
@@ -60,6 +63,11 @@ public class AttemptService {
             return previous(userId, sessionId, request)
                     .orElseThrow(() -> conflict("Ese ejercicio ya tiene un resultado registrado."));
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<AttemptOutcome> outcomes(UUID sessionId) {
+        return repository.findBySessionId(sessionId).stream().map(AttemptOutcome::from).toList();
     }
 
     private Optional<Recorded> previous(UUID userId, UUID sessionId, AttemptRequest request) {

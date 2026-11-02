@@ -25,6 +25,7 @@ import com.mentia.auth.dto.RecoveryResetRequest;
 import com.mentia.auth.dto.TokenResponse;
 import com.mentia.security.AuthenticatedUser;
 import com.mentia.support.WebLayerTest;
+import com.mentia.security.Role;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -147,7 +148,7 @@ class AuthControllerTest extends WebLayerTest {
 
     @Test
     void loginDevuelveElTokenConElContrato() throws Exception {
-        given(authService.login(any())).willReturn(TokenResponse.bearer("un.jwt.firmado", 86400));
+        given(authService.login(any())).willReturn(TokenResponse.bearer("un.jwt.firmado", 86400, Role.USER));
 
         login("""
                 {"username": "Lector_Nocturno", "password": "una-clave-larga"}""")
