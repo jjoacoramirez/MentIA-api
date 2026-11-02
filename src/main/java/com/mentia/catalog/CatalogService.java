@@ -3,6 +3,7 @@ package com.mentia.catalog;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.mentia.catalog.domain.Exercise;
 import com.mentia.catalog.dto.CategoryResponse;
 import com.mentia.catalog.dto.ExerciseDefinition;
+import com.mentia.catalog.dto.VariantDefinition;
 
 /**
  * Consultas del catálogo para el resto de los módulos. Solo expone categorías y ejercicios activos.
@@ -27,10 +29,13 @@ public class CatalogService {
 
     private final CategoryRepository categoryRepository;
     private final ExerciseRepository exerciseRepository;
+    private final ExerciseVariantRepository variantRepository;
 
-    public CatalogService(CategoryRepository categoryRepository, ExerciseRepository exerciseRepository) {
+    public CatalogService(CategoryRepository categoryRepository, ExerciseRepository exerciseRepository,
+            ExerciseVariantRepository variantRepository) {
         this.categoryRepository = categoryRepository;
         this.exerciseRepository = exerciseRepository;
+        this.variantRepository = variantRepository;
     }
 
     public List<CategoryResponse> activeCategories() {
@@ -48,6 +53,12 @@ public class CatalogService {
     public List<ExerciseDefinition> activeExercises(String categoryCode) {
         return exerciseRepository.findActiveByCategoryCode(categoryCode).stream()
                 .map(ExerciseDefinition::from)
+                .toList();
+    }
+
+    public List<VariantDefinition> activeVariants(UUID exerciseId) {
+        return variantRepository.findByExerciseIdAndActiveTrueOrderByVariantKey(exerciseId).stream()
+                .map(VariantDefinition::from)
                 .toList();
     }
 

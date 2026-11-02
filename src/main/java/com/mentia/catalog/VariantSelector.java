@@ -5,8 +5,8 @@ import java.util.UUID;
 import com.mentia.catalog.dto.VariantDefinition;
 
 /**
- * Elige la variante de un ejercicio para un ítem de sesión. BACK-11 la implementa con rotación según el uso
- * reciente del usuario; hasta entonces la elección es aleatoria ({@link RandomVariantSelector}).
+ * Elige la variante de un ejercicio para un ítem de sesión. La implementación (en el módulo engine) aplica
+ * la rotación según el uso reciente del usuario.
  */
 public interface VariantSelector {
 
