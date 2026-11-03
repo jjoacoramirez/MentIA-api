@@ -206,7 +206,7 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - `POST /sessions/{id}/start` pasa a `IN_PROGRESS`.
 - Decisiones tomadas al implementarlo:
   - El punto de partida exigido es tener perfil de desempeño: evaluación completada, o salteada por un admin.
-  - Dentro de una sesión no se repite un ejercicio mientras haya alternativas.
+  - Dentro de una sesión nunca se repite un ejercicio. Si se acaban los ejercicios disponibles, la sesión dura menos que lo pedido (hoy hay 2 por categoría: hasta 2 ítems en una sesión de una categoría y hasta 6 en una combinada).
   - Tope de ítems por sesión: `mentia.engine.selection.max-items`, 12 por defecto.
   - `rationale` incluye:
     - `FOCUS_LOWER_PERFORMANCE` solo si la categoría de menor score recibió más ítems que las demás;

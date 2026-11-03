@@ -58,6 +58,7 @@ class TrainingSessionFlowIntegrationTest extends IntegrationTest {
         Set<String> categories = new HashSet<>();
         items.forEach(i -> categories.add(i.get("category").asText()));
         assertThat(categories).containsExactlyInAnyOrder("ATENCION", "MEMORIA_VISUAL", "MEMORIA_TRABAJO");
+        assertThat(items).extracting(i -> i.get("exerciseCode").asText()).doesNotHaveDuplicates();
         assertThat(list(session.get("rationale"))).last()
                 .satisfies(r -> assertThat(r.get("code").asText()).isEqualTo("VARIETY_ROTATION"));
 
@@ -163,7 +164,8 @@ class TrainingSessionFlowIntegrationTest extends IntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(matchesContract()));
         assertThat(list(focused.get("items"))).isNotEmpty()
-                .allSatisfy(i -> assertThat(i.get("category").asText()).isEqualTo("ATENCION"));
+                .allSatisfy(i -> assertThat(i.get("category").asText()).isEqualTo("ATENCION"))
+                .extracting(i -> i.get("exerciseCode").asText()).doesNotHaveDuplicates();
         api.perform(user, get("/api/v1/sessions/{id}", general)).andExpect(jsonPath("$.status").value("ABANDONED"));
 
         // La misma categoría, o sin categoría, retoma la abierta.
