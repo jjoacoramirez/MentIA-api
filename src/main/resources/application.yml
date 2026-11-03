@@ -35,6 +35,12 @@ mentia:
       max-attempts: 5
       lockout: 15m
   # Umbrales y pesos del motor (docs/plan-backend.md, sección 7). Se completa en BACK-10.
+  progress:
+    # Los "días" de actividad y de racha se cuentan en esta zona (no se guarda la ubicación del usuario).
+    time-zone: America/Argentina/Buenos_Aires
+    streaks-enabled: true
+    # Sesiones completadas por día como objetivo. 0 = sin objetivo diario (el resumen devuelve dailyGoal: null).
+    daily-goal-sessions: 0
   gamification:
     # XP por sesión completada = xp-per-session + xp-per-item × ítems + bonus (si precisión >= accuracy-bonus-threshold).
     xp-per-session: 10
