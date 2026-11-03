@@ -1,5 +1,6 @@
 package com.mentia.session;
 
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.mentia.security.AuthenticatedUser;
@@ -57,5 +59,17 @@ public class SessionController {
     public SessionResultResponse complete(@AuthenticationPrincipal AuthenticatedUser user,
             @PathVariable UUID sessionId) {
         return lifecycleService.complete(user.userId(), sessionId);
+    }
+
+    @PostMapping("/{sessionId}/abandon")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void abandon(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable UUID sessionId) {
+        lifecycleService.abandon(user.userId(), sessionId);
+    }
+
+    /** El snapshot guardado al completar: es el mismo cuerpo que devolvió {@code complete}. */
+    @GetMapping("/{sessionId}/result")
+    public Map<String, Object> result(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable UUID sessionId) {
+        return lifecycleService.result(user.userId(), sessionId);
     }
 }

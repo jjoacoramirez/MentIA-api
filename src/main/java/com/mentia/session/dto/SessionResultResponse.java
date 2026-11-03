@@ -7,7 +7,8 @@ import com.mentia.session.domain.SessionStatus;
 import com.mentia.session.domain.SessionType;
 
 /**
- * Schema {@code SessionResult} del contrato. {@code comparison} y {@code gamification} llegan con BACK-13 y BACK-18.
+ * Schema {@code SessionResult} del contrato. La comparación es solo contra la sesión anterior del mismo usuario
+ * y del mismo tipo, y habla de desempeño dentro de MentIA.
  */
 public record SessionResultResponse(
         UUID sessionId,
@@ -21,8 +22,13 @@ public record SessionResultResponse(
         long totalTimeMs,
         List<CategoryResult> categories,
         List<Adaptation> adaptations,
-        Object comparison,
-        Object gamification) {
+        Comparison comparison,
+        Rewards gamification) {
+
+    public SessionResultResponse withGamification(Rewards rewards) {
+        return new SessionResultResponse(sessionId, type, status, itemsTotal, itemsCompleted, correctCount, errorCount,
+                accuracy, totalTimeMs, categories, adaptations, comparison, rewards);
+    }
 
     public record CategoryResult(
             String category,
@@ -45,5 +51,15 @@ public record SessionResultResponse(
         UP,
         KEEP,
         DOWN
+    }
+
+    public record Comparison(double previousAccuracy, double accuracyDelta) {
+    }
+
+    public record Rewards(int xpEarned, int xpTotal, int level, boolean leveledUp,
+            List<AchievementRef> unlockedAchievements) {
+    }
+
+    public record AchievementRef(String code, String name) {
     }
 }

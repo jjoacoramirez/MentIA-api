@@ -96,6 +96,48 @@ class SessionControllerTest extends WebLayerTest {
                 .andExpect(matchesContract());
     }
 
+    @Test
+    void abandonarDevuelve204ConElContrato() throws Exception {
+        mockMvc.perform(post("/api/v1/sessions/{id}/abandon", SESSION).with(authenticatedAs(USER)))
+                .andExpect(status().isNoContent())
+                .andExpect(matchesContract());
+        org.mockito.Mockito.verify(lifecycleService).abandon(USER, SESSION);
+    }
+
+    @Test
+    void abandonarUnaSesionCerradaDevuelve409ConElContrato() throws Exception {
+        org.mockito.BDDMockito.willThrow(new ApiException(HttpStatus.CONFLICT, ErrorCode.SESSION_STATE_INVALID,
+                "Esta sesión ya está cerrada.")).given(lifecycleService).abandon(USER, SESSION);
+
+        mockMvc.perform(post("/api/v1/sessions/{id}/abandon", SESSION).with(authenticatedAs(USER)))
+                .andExpect(status().isConflict())
+                .andExpect(matchesContract());
+    }
+
+    @Test
+    void elResultadoGuardadoSeDevuelveConElContrato() throws Exception {
+        Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+        snapshot.put("sessionId", SESSION.toString());
+        snapshot.put("type", "TRAINING");
+        snapshot.put("status", "COMPLETED");
+        snapshot.put("itemsTotal", 6);
+        snapshot.put("itemsCompleted", 6);
+        snapshot.put("correctCount", 5);
+        snapshot.put("errorCount", 1);
+        snapshot.put("accuracy", 0.83);
+        snapshot.put("totalTimeMs", 9000);
+        snapshot.put("categories", List.of());
+        snapshot.put("adaptations", List.of());
+        snapshot.put("comparison", Map.of("previousAccuracy", 0.7, "accuracyDelta", 0.13));
+        snapshot.put("gamification", null);
+        given(lifecycleService.result(USER, SESSION)).willReturn(snapshot);
+
+        mockMvc.perform(get("/api/v1/sessions/{id}/result", SESSION).with(authenticatedAs(USER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.comparison.accuracyDelta").value(0.13))
+                .andExpect(matchesContract());
+    }
+
     private static SessionResponse session() {
         Map<String, Object> rationale = new java.util.LinkedHashMap<>();
         rationale.put("code", "VARIETY_ROTATION");

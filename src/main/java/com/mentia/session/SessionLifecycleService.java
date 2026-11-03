@@ -5,11 +5,15 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,9 +35,9 @@ import com.mentia.session.dto.SessionResultResponse.Adaptation;
 import com.mentia.session.dto.SessionResultResponse.CategoryResult;
 
 /**
- * Cierre de sesión. Versión mínima de BACK-07: consolida los intentos y, si es la evaluación inicial, fija el nivel
- * inicial por categoría. Para sesiones de entrenamiento los niveles no cambian todavía: las adaptaciones,
- * la comparación con la sesión anterior y la gamificación llegan con BACK-13.
+ * Cierre y abandono de sesiones (BACK-13). Al completar consolida los intentos, ajusta niveles (evaluación inicial:
+ * nivel de partida; entrenamiento: motor adaptativo), actualiza el desempeño, compara con la sesión anterior,
+ * guarda el snapshot del resultado y publica {@link SessionCompletedEvent}.
  */
 @Service
 public class SessionLifecycleService {
@@ -41,6 +45,8 @@ public class SessionLifecycleService {
     private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {
     };
 
+    private final SessionRepository repository;
+    private final ObjectProvider<SessionRewardsQuery> rewardsQuery;
     private final SessionService sessionService;
     private final AttemptService attemptService;
     private final PerformanceService performanceService;
@@ -50,9 +56,12 @@ public class SessionLifecycleService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public SessionLifecycleService(SessionService sessionService, AttemptService attemptService,
+    public SessionLifecycleService(SessionRepository repository, ObjectProvider<SessionRewardsQuery> rewardsQuery,
+            SessionService sessionService, AttemptService attemptService,
             PerformanceService performanceService, CatalogService catalogService, DifficultyEngine difficultyEngine,
             ApplicationEventPublisher events, ObjectMapper objectMapper, Clock clock) {
+        this.repository = repository;
+        this.rewardsQuery = rewardsQuery;
         this.sessionService = sessionService;
         this.attemptService = attemptService;
         this.performanceService = performanceService;
@@ -105,17 +114,67 @@ public class SessionLifecycleService {
         });
 
         int correct = (int) outcomes.stream().filter(AttemptOutcome::correct).count();
+        double accuracy = meanAccuracy(outcomes);
         SessionResultResponse result = new SessionResultResponse(session.getId(), session.getType(),
                 SessionStatus.COMPLETED, session.getItems().size(), outcomes.size(), correct,
-                outcomes.size() - correct, meanAccuracy(outcomes),
+                outcomes.size() - correct, accuracy,
                 outcomes.stream().mapToLong(AttemptOutcome::responseTimeMs).sum(), categories, adaptations,
-                null, null);
+                comparison(userId, session.getType(), accuracy), null);
 
+        // Primero se cierra la sesión y se avisa; después se leen las recompensas que dejaron los listeners.
         session.complete(now, objectMapper.convertValue(result, MAP));
+        Set<String> practiced = new LinkedHashSet<>();
+        categories.stream().filter(c -> c.itemsCompleted() > 0).forEach(c -> practiced.add(c.category()));
+        events.publishEvent(new SessionCompletedEvent(userId, sessionId, session.getType(), outcomes.size(), accuracy,
+                practiced, now));
         if (assessment) {
             events.publishEvent(new AssessmentCompletedEvent(userId, sessionId, now));
         }
+
+        SessionRewardsQuery rewards = rewardsQuery.getIfAvailable();
+        if (rewards != null) {
+            Optional<SessionResultResponse.Rewards> earned = rewards.rewardsFor(sessionId);
+            if (earned.isPresent()) {
+                result = result.withGamification(earned.get());
+                session.replaceResult(objectMapper.convertValue(result, MAP));
+            }
+        }
         return result;
+    }
+
+    /** Abandona una sesión abierta. No actualiza el desempeño; los intentos ya registrados quedan en el historial. */
+    @Transactional
+    public void abandon(UUID userId, UUID sessionId) {
+        TrainingSession session = sessionService.load(userId, sessionId);
+        if (!session.isOpen()) {
+            throw SessionService.stateInvalid("Esta sesión ya está cerrada.");
+        }
+        Instant now = Instant.now(clock);
+        session.abandon(now);
+        events.publishEvent(new SessionAbandonedEvent(userId, sessionId, session.getType(), now));
+    }
+
+    /** El resultado guardado al completar la sesión. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> result(UUID userId, UUID sessionId) {
+        TrainingSession session = sessionService.load(userId, sessionId);
+        if (session.getStatus() != SessionStatus.COMPLETED) {
+            throw SessionService.stateInvalid("La sesión todavía no tiene resultado: no está completada.");
+        }
+        return session.getResult();
+    }
+
+    /** Contra la última sesión completada del mismo tipo; null si es la primera. */
+    private SessionResultResponse.Comparison comparison(UUID userId, SessionType type, double accuracy) {
+        return repository.findFirstByUserIdAndTypeAndStatusOrderByFinishedAtDesc(userId, type, SessionStatus.COMPLETED)
+                .map(TrainingSession::getResult)
+                .map(previous -> previous.get("accuracy"))
+                .filter(Number.class::isInstance)
+                .map(previous -> {
+                    double previousAccuracy = ((Number) previous).doubleValue();
+                    return new SessionResultResponse.Comparison(previousAccuracy, accuracy - previousAccuracy);
+                })
+                .orElse(null);
     }
 
     /** Nivel con el que sigue cada categoría según el motor adaptativo (BACK-10). */

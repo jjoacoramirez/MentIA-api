@@ -108,6 +108,12 @@ public class TrainingSession {
         this.result = new LinkedHashMap<>(result);
     }
 
+    /** Reemplaza el snapshot de una sesión completada (por ejemplo, para sumarle las recompensas). */
+    public void replaceResult(Map<String, Object> result) {
+        requireStatus(SessionStatus.COMPLETED);
+        this.result = new LinkedHashMap<>(result);
+    }
+
     /** Una sesión abierta ({@code GENERATED} o {@code IN_PROGRESS}) pasa a {@code ABANDONED}. */
     public void abandon(Instant now) {
         if (!isOpen()) {
