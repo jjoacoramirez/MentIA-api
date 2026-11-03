@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -18,14 +19,16 @@ import com.mentia.auth.dto.RegisterResponse;
 import com.mentia.common.error.ApiException;
 import com.mentia.common.error.ErrorCode;
 import com.mentia.profile.domain.AgeRange;
-import com.mentia.security.SecurityConfig;
+import com.mentia.auth.dto.LoginRequest;
+import com.mentia.auth.dto.TokenResponse;
+import com.mentia.security.AuthenticatedUser;
+import com.mentia.support.WebLayerTest;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -33,8 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 @WebMvcTest(AuthController.class)
-@Import(SecurityConfig.class)
-class AuthControllerTest {
+class AuthControllerTest extends WebLayerTest {
 
     private static final String URL = "/api/v1/auth/register";
 
@@ -136,6 +138,66 @@ class AuthControllerTest {
                 {"username": "usuario", "password": "corta-77", "ageRange": "18-24"}""")
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(not(containsString("corta-77"))));
+    }
+
+    @Test
+    void loginDevuelveElTokenConElContrato() throws Exception {
+        given(authService.login(any())).willReturn(TokenResponse.bearer("un.jwt.firmado", 86400));
+
+        login("""
+                {"username": "Lector_Nocturno", "password": "una-clave-larga"}""")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("un.jwt.firmado"))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").value(86400))
+                .andExpect(matchesContract());
+
+        verify(authService).login(new LoginRequest("Lector_Nocturno", "una-clave-larga"));
+    }
+
+    @Test
+    void loginConCredencialesInvalidasDevuelve401() throws Exception {
+        given(authService.login(any())).willThrow(new ApiException(HttpStatus.UNAUTHORIZED,
+                ErrorCode.INVALID_CREDENTIALS, "El nombre de usuario o la contraseña no son correctos."));
+
+        login("""
+                {"username": "alguien", "password": "otra-clave"}""")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+                .andExpect(matchesContract());
+    }
+
+    @Test
+    void loginSinCamposDevuelve400() throws Exception {
+        login("{}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors.length()").value(2));
+        verify(authService, never()).login(any());
+    }
+
+    @Test
+    void logoutRevocaElTokenActual() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/auth/logout").with(authenticatedAs(userId)))
+                .andExpect(status().isNoContent())
+                .andExpect(matchesContract());
+
+        verify(authService).logout(argThat(
+                (AuthenticatedUser u) -> u.userId().equals(userId) && u.jti().equals("jti-" + userId)));
+    }
+
+    @Test
+    void logoutSinTokenDevuelve401() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/logout"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+        verify(authService, never()).logout(any());
+    }
+
+    private ResultActions login(String body) throws Exception {
+        return mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
     private void expectValidationError(String body, String field) throws Exception {

@@ -8,15 +8,23 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.mentia.auth.domain.User;
+import com.mentia.auth.dto.LoginRequest;
 import com.mentia.auth.dto.RegisterRequest;
 import com.mentia.auth.dto.RegisterResponse;
+import com.mentia.auth.dto.TokenResponse;
 import com.mentia.common.error.ApiException;
 import com.mentia.common.error.ErrorCode;
 import com.mentia.profile.ProfileService;
 import com.mentia.profile.domain.AgeRange;
+import com.mentia.security.AuthenticatedUser;
+import com.mentia.security.JwtService;
+import com.mentia.security.SecurityProperties;
+import com.mentia.security.TokenRevocationService;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,14 +49,21 @@ class AuthServiceTest {
     @Mock
     private ProfileService profileService;
 
+    @Mock
+    private TokenRevocationService revocationService;
+
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+
+    private JwtService jwtService;
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, profileService, passwordEncoder,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        jwtService = new JwtService(new SecurityProperties("s".repeat(40), Duration.ofHours(24)), clock);
+        authService = new AuthService(userRepository, profileService, passwordEncoder, jwtService,
+                revocationService, clock);
     }
 
     @Test
@@ -104,6 +119,56 @@ class AuthServiceTest {
                 .extracting(e -> ((ApiException) e).getCode())
                 .isEqualTo(ErrorCode.USERNAME_TAKEN);
         verify(profileService, never()).createInitialProfile(any(), any());
+    }
+
+    @Test
+    void loginEmiteUnTokenDelUsuario() {
+        User user = existingUser("lector");
+
+        TokenResponse response = authService.login(new LoginRequest("LECTOR", PASSWORD));
+
+        assertThat(response.tokenType()).isEqualTo("Bearer");
+        assertThat(response.expiresIn()).isEqualTo(Duration.ofHours(24).toSeconds());
+        Optional<AuthenticatedUser> parsed = jwtService.parse(response.accessToken());
+        assertThat(parsed).get().extracting(AuthenticatedUser::userId).isEqualTo(user.getId());
+    }
+
+    @Test
+    void contrasenaIncorrectaYUsuarioInexistenteDanElMismoError() {
+        existingUser("lector");
+        given(userRepository.findByUsername("nadie")).willReturn(Optional.empty());
+
+        ApiException wrongPassword = loginFails(new LoginRequest("lector", "otra-clave-larga"));
+        ApiException unknownUser = loginFails(new LoginRequest("nadie", PASSWORD));
+
+        assertThat(wrongPassword.getCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+        assertThat(unknownUser.getCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+        assertThat(wrongPassword.getStatus()).isEqualTo(unknownUser.getStatus());
+        assertThat(wrongPassword.getMessage()).isEqualTo(unknownUser.getMessage());
+    }
+
+    @Test
+    void logoutRevocaElJtiHastaQueVence() {
+        AuthenticatedUser user = new AuthenticatedUser(UUID.randomUUID(), "jti-1", NOW, NOW.plusSeconds(3600));
+
+        authService.logout(user);
+
+        verify(revocationService).revoke("jti-1", NOW.plusSeconds(3600));
+    }
+
+    private ApiException loginFails(LoginRequest request) {
+        try {
+            authService.login(request);
+        } catch (ApiException e) {
+            return e;
+        }
+        throw new AssertionError("Se esperaba ApiException");
+    }
+
+    private User existingUser(String username) {
+        User user = withId(new User(username, passwordEncoder.encode(PASSWORD), NOW), UUID.randomUUID());
+        given(userRepository.findByUsername(username)).willReturn(Optional.of(user));
+        return user;
     }
 
     private static User withId(User user, UUID id) {
