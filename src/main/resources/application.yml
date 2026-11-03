@@ -35,4 +35,11 @@ mentia:
       max-attempts: 5
       lockout: 15m
   # Umbrales y pesos del motor (docs/plan-backend.md, sección 7). Se completa en BACK-10.
-  engine: {}
+  engine:
+    rotation:
+      # Cuántas sesiones hacia atrás se miran para penalizar lo usado recientemente.
+      lookback-sessions: 5
+      # Lo usado en la sesión anterior no se repite si hay alternativas.
+      avoid-last-session: true
+      # Peso de un ejercicio o variante usado hace 1, 2, ... 5 sesiones (lo no usado pesa 1.0).
+      recency-weights: [0.0, 0.25, 0.5, 0.75, 1.0]
