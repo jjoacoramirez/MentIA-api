@@ -51,6 +51,12 @@ public class ProfileService {
         return toResponse(load(userId));
     }
 
+    /** Duración de sesión elegida por el usuario: es el default al generar una sesión. */
+    @Transactional(readOnly = true)
+    public int sessionMinutes(UUID userId) {
+        return load(userId).getSessionMinutes();
+    }
+
     @Transactional
     public ProfileResponse update(UUID userId, ProfileUpdateRequest request) {
         TrainingProfile profile = load(userId);

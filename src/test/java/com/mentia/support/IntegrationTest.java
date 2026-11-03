@@ -15,7 +15,7 @@ import com.mentia.TestcontainersConfiguration;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, ApiClient.class })
 @Testcontainers(disabledWithoutDocker = true)
 public abstract class IntegrationTest {
 }

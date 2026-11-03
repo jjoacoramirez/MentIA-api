@@ -76,6 +76,11 @@ public class SessionService {
                 .forEach(session -> session.abandon(now));
     }
 
+    @Transactional(readOnly = true)
+    public SessionResponse get(UUID userId, UUID sessionId) {
+        return assembler.toResponse(load(userId, sessionId));
+    }
+
     /** {@code GENERATED → IN_PROGRESS}. */
     @Transactional
     public SessionResponse start(UUID userId, UUID sessionId) {

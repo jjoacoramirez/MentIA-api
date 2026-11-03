@@ -2,18 +2,21 @@ package com.mentia.session;
 
 import static com.mentia.support.Contract.matchesContract;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -41,6 +44,66 @@ class SessionControllerTest extends WebLayerTest {
 
     @MockitoBean
     SessionLifecycleService lifecycleService;
+
+    @MockitoBean
+    SessionGenerationService generationService;
+
+    @Test
+    void generarDevuelve201ConElContratoYUsaLaDuracionPedida() throws Exception {
+        given(generationService.create(USER, 15)).willReturn(new SessionGenerationService.Generated(session(), true));
+
+        mockMvc.perform(post("/api/v1/sessions").with(authenticatedAs(USER))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"durationMinutes\": 15}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.rationale[0].code").value("VARIETY_ROTATION"))
+                .andExpect(matchesContract());
+    }
+
+    @Test
+    void sinBodyUsaLaDuracionDelPerfilYRetomarDevuelve200() throws Exception {
+        given(generationService.create(USER, null)).willReturn(new SessionGenerationService.Generated(session(), false));
+
+        mockMvc.perform(post("/api/v1/sessions").with(authenticatedAs(USER)))
+                .andExpect(status().isOk())
+                .andExpect(matchesContract());
+    }
+
+    @Test
+    void duracionFueraDeRangoDevuelve400() throws Exception {
+        mockMvc.perform(post("/api/v1/sessions").with(authenticatedAs(USER))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"durationMinutes\": 45}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("durationMinutes"));
+    }
+
+    @Test
+    void sinEvaluacionDevuelve409AssessmentRequired() throws Exception {
+        given(generationService.create(USER, null)).willThrow(new ApiException(HttpStatus.CONFLICT,
+                ErrorCode.ASSESSMENT_REQUIRED, "Antes de entrenar necesitás completar la evaluación inicial."));
+
+        mockMvc.perform(post("/api/v1/sessions").with(authenticatedAs(USER)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ASSESSMENT_REQUIRED"))
+                .andExpect(matchesContract());
+    }
+
+    @Test
+    void obtenerUnaSesionConElContrato() throws Exception {
+        given(sessionService.get(USER, SESSION)).willReturn(session());
+
+        mockMvc.perform(get("/api/v1/sessions/{id}", SESSION).with(authenticatedAs(USER)))
+                .andExpect(status().isOk())
+                .andExpect(matchesContract());
+    }
+
+    private static SessionResponse session() {
+        Map<String, Object> rationale = new java.util.LinkedHashMap<>();
+        rationale.put("code", "VARIETY_ROTATION");
+        rationale.put("category", null);
+        rationale.put("message", "Rotamos ejercicios y estímulos para que cada sesión sea distinta.");
+        return new SessionResponse(SESSION, SessionType.TRAINING, SessionStatus.GENERATED, 15, 840, List.of(),
+                List.of(rationale), Instant.parse("2026-11-03T12:00:00Z"));
+    }
 
     @Test
     void iniciarDevuelveLaSesionEnCursoConElContrato() throws Exception {
