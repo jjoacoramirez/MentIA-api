@@ -26,7 +26,7 @@ class CategoriesIntegrationTest extends IntegrationTest {
 
     @Test
     void listaSoloLasCategoriasActivasPrimeroLasDelMvp() throws Exception {
-        String token = jwtService.issue(UUID.randomUUID()).token();
+        String token = jwtService.issue(UUID.randomUUID(), 0).token();
 
         mockMvc.perform(get("/api/v1/categories").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())

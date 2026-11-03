@@ -74,8 +74,8 @@ class AuthFlowIntegrationTest extends IntegrationTest {
 
         revocationService.purgeExpired();
 
-        assertThat(revocationService.isRevoked("vencido")).isFalse();
-        assertThat(revocationService.isRevoked("vigente")).isTrue();
+        assertThat(jdbc.queryForList("SELECT jti FROM revoked_tokens WHERE jti IN ('vencido', 'vigente')", String.class))
+                .containsExactly("vigente");
     }
 
     private void register(String username) throws Exception {

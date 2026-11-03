@@ -18,12 +18,14 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
 /**
- * Emite y valida JWT HS256 con {@code sub} = userId, {@code jti}, {@code iat} y {@code exp}.
+ * Emite y valida JWT HS256 con {@code sub} = userId, {@code jti}, {@code iat}, {@code exp} y {@code ver}
+ * (versión de tokens del usuario).
  */
 @Service
 public class JwtService {
 
     static final int MIN_SECRET_BYTES = 32;
+    static final String VERSION_CLAIM = "ver";
 
     private final SecretKey key;
     private final Duration ttl;
@@ -40,13 +42,14 @@ public class JwtService {
         this.clock = clock;
     }
 
-    public IssuedToken issue(UUID userId) {
+    public IssuedToken issue(UUID userId, int tokenVersion) {
         Instant now = clock.instant();
         String token = Jwts.builder()
                 .subject(userId.toString())
                 .id(UUID.randomUUID().toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(ttl)))
+                .claim(VERSION_CLAIM, tokenVersion)
                 .signWith(key, Jwts.SIG.HS256)
                 .compact();
         return new IssuedToken(token, ttl.toSeconds());
@@ -61,12 +64,13 @@ public class JwtService {
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-            if (claims.getSubject() == null || claims.getId() == null
+            Integer version = claims.get(VERSION_CLAIM, Integer.class);
+            if (claims.getSubject() == null || claims.getId() == null || version == null
                     || claims.getIssuedAt() == null || claims.getExpiration() == null) {
                 return Optional.empty();
             }
             return Optional.of(new AuthenticatedUser(UUID.fromString(claims.getSubject()), claims.getId(),
-                    claims.getIssuedAt().toInstant(), claims.getExpiration().toInstant()));
+                    claims.getIssuedAt().toInstant(), claims.getExpiration().toInstant(), version));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }

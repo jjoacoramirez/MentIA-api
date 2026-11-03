@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -32,13 +33,46 @@ public class User {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "recovery_failed_attempts", nullable = false)
+    private int recoveryFailedAttempts;
+
+    @Column(name = "recovery_locked_until")
+    private Instant recoveryLockedUntil;
+
     protected User() {
     }
 
-    public User(String username, String passwordHash, Instant createdAt) {
+    public User(String username, String passwordHash, String recoveryCodeHash, Instant createdAt) {
         this.username = username;
         this.passwordHash = passwordHash;
+        this.recoveryCodeHash = recoveryCodeHash;
         this.createdAt = createdAt;
+    }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    public void changeRecoveryCode(String recoveryCodeHash) {
+        this.recoveryCodeHash = recoveryCodeHash;
+    }
+
+    public boolean isRecoveryLocked(Instant now) {
+        return recoveryLockedUntil != null && now.isBefore(recoveryLockedUntil);
+    }
+
+    /** Al llegar a {@code maxAttempts} fallidos seguidos, bloquea la recuperación durante {@code lockout}. */
+    public void registerFailedRecovery(Instant now, int maxAttempts, Duration lockout) {
+        recoveryFailedAttempts++;
+        if (recoveryFailedAttempts >= maxAttempts) {
+            recoveryLockedUntil = now.plus(lockout);
+            recoveryFailedAttempts = 0;
+        }
+    }
+
+    public void clearFailedRecoveries() {
+        recoveryFailedAttempts = 0;
+        recoveryLockedUntil = null;
     }
 
     public UUID getId() {

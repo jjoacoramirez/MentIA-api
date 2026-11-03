@@ -1,6 +1,9 @@
 package com.mentia.auth;
 
 import com.mentia.auth.dto.LoginRequest;
+import com.mentia.auth.dto.RecoveryCodeResponse;
+import com.mentia.auth.dto.RecoveryResetRequest;
+import com.mentia.auth.dto.RegenerateRecoveryRequest;
 import com.mentia.auth.dto.RegisterRequest;
 import com.mentia.auth.dto.RegisterResponse;
 import com.mentia.auth.dto.TokenResponse;
@@ -19,9 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final RecoveryService recoveryService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, RecoveryService recoveryService) {
         this.authService = authService;
+        this.recoveryService = recoveryService;
     }
 
     @PostMapping("/register")
@@ -39,5 +44,16 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@AuthenticationPrincipal AuthenticatedUser user) {
         authService.logout(user);
+    }
+
+    @PostMapping("/recovery/reset")
+    public RecoveryCodeResponse resetPassword(@Valid @RequestBody RecoveryResetRequest request) {
+        return recoveryService.reset(request);
+    }
+
+    @PostMapping("/recovery/regenerate")
+    public RecoveryCodeResponse regenerateRecoveryCode(@AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody RegenerateRecoveryRequest request) {
+        return recoveryService.regenerate(user.userId(), request.password());
     }
 }

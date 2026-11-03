@@ -80,7 +80,7 @@ class ProfileIntegrationTest extends IntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         UUID userId = UUID.fromString(objectMapper.readTree(body).get("userId").asText());
-        return jwtService.issue(userId).token();
+        return jwtService.issue(userId, 0).token();
     }
 
     private static MockHttpServletRequestBuilder auth(MockHttpServletRequestBuilder builder, String token) {
