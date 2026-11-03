@@ -28,4 +28,8 @@ docker compose up -d db      # PostgreSQL local
 ./mvnw verify                # tests + chequeos
 ```
 
-Los tests usan Testcontainers, así que necesitan Docker corriendo. No necesitan `.env`.
+Los tests de integración usan Testcontainers, así que necesitan Docker corriendo. No necesitan `.env`.
+**Sin Docker se saltean** (aparecen como `Skipped`) en lugar de fallar: un `verify` en verde sin Docker no valida
+la integración con la base, así que antes de mergear hay que correrlo en una máquina con Docker.
+
+Los tests que validan contra el contrato usan `Contract.matchesContract()`, que chequea request y response contra `openapi.yaml`.

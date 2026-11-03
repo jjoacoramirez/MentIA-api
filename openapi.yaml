@@ -11,6 +11,7 @@ info:
     - Los errores usan `application/problem+json` (RFC 7807) con un campo `code` estable.
     - Codigos de error usados: VALIDATION_ERROR, USERNAME_TAKEN, INVALID_CREDENTIALS, INVALID_RECOVERY,
       UNAUTHORIZED, ASSESSMENT_REQUIRED, SESSION_NOT_FOUND, SESSION_STATE_INVALID, ITEM_NOT_IN_SESSION.
+      Para errores inesperados del servidor se usa ademas INTERNAL_ERROR (500).
     - Los scores y niveles representan desempeno dentro de MentIA. No son mediciones clinicas.
     - Fechas y horas en UTC (ISO 8601).
 servers:
@@ -601,8 +602,10 @@ components:
       properties:
         username:
           type: string
-          pattern: '^[a-z0-9_.]{3,30}$'
-          description: Se normaliza a minusculas. No debe ser un dato personal.
+          pattern: '^[A-Za-z0-9_.]{3,30}$'
+          description: |
+            Se normaliza a minusculas y la unicidad no distingue mayusculas (`Juan.P` y `juan.p` son el mismo).
+            No debe ser un dato personal.
         password:
           type: string
           format: password
