@@ -35,6 +35,14 @@ mentia:
       max-attempts: 5
       lockout: 15m
   # Umbrales y pesos del motor (docs/plan-backend.md, sección 7). Se completa en BACK-10.
+  gamification:
+    # XP por sesión completada = xp-per-session + xp-per-item × ítems + bonus (si precisión >= accuracy-bonus-threshold).
+    xp-per-session: 10
+    xp-per-item: 2
+    xp-accuracy-bonus: 5
+    accuracy-bonus-threshold: 0.8
+    # Pasar del nivel n al n+1 requiere xp-per-level-factor × n XP.
+    xp-per-level-factor: 100
   session:
     # Una sesión GENERATED o IN_PROGRESS más vieja que esto se abandona al pedir una nueva.
     stale-after: 12h
