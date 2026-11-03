@@ -76,6 +76,13 @@ public class CatalogService {
                 .toList();
     }
 
+    /** Todas las categorías activas, en el mismo orden que {@link #activeCategories()}. */
+    public List<CategoryRef> activeCategoryRefs() {
+        return categoryRepository.findByActiveTrueOrderByMvpDescNameAsc().stream()
+                .map(CategoryRef::from)
+                .toList();
+    }
+
     /**
      * Las búsquedas por id no filtran por {@code active}: una sesión vieja puede referenciar contenido que
      * después se desactivó, y tiene que poder mostrarse igual.
