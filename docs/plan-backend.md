@@ -203,24 +203,45 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - Selección de categorías y rotación según sección 7. Nivel de cada ítem = nivel actual del usuario en la categoría.
 - Devuelve `rationale`: lista estructurada de motivos con texto en es-AR no clínico (lo necesita FRONT-22).
 - `POST /sessions/{id}/start` pasa a `IN_PROGRESS`.
+- Decisiones tomadas al implementarlo:
+  - El punto de partida exigido es tener perfil de desempeño: evaluación completada, o salteada por un admin.
+  - Dentro de una sesión no se repite un ejercicio mientras haya alternativas.
+  - Tope de ítems por sesión: `mentia.engine.selection.max-items`, 12 por defecto.
+  - `rationale` incluye:
+    - `FOCUS_LOWER_PERFORMANCE` solo si la categoría de menor score recibió más ítems que las demás;
+    - `LEVEL_UP` y `LEVEL_DOWN` según la última sesión completada;
+    - `VARIETY_ROTATION` siempre.
 
 ### BACK-13 Resultado de sesión (SCRUM-27)
 - `POST /sessions/{id}/complete` consolida: ítems, aciertos, errores, tiempo total, resultados por categoría, nivel alcanzado, adaptaciones (usa `DifficultyEngine`), comparación con la sesión anterior del mismo usuario. Guarda el snapshot en `training_sessions.result`.
 - Actualiza `performance_profiles` y publica `SessionCompletedEvent`.
 - `POST /sessions/{id}/abandon` y `GET /sessions/{id}/result`.
 - La comparación se limita al propio usuario y a desempeño dentro de MentIA.
+- Implementado así:
+  - La comparación se hace contra la última sesión completada **del mismo tipo**.
+  - Las recompensas entran al resultado a través de `SessionRewardsQuery`, que implementa gamificación; `session` no la conoce.
 
 ### BACK-14 Historial y progreso (SCRUM-28)
 - `GET /sessions` (paginado), `GET /progress/summary`, `GET /progress/categories?granularity=week|month`.
 - Agregaciones en SQL, no en memoria. Revisar índices.
+- Implementado así:
+  - Modelo de lectura en el módulo `progress`, con consultas SQL de solo lectura e índices en `V11`.
+  - La racha está habilitada (`mentia.progress.streaks-enabled`). El objetivo diario queda en `null` (`daily-goal-sessions: 0`) hasta que se confirme el ajuste 4.
 
 ### BACK-18 Gamificación básica (SCRUM-29)
 - Escucha `SessionCompletedEvent`. XP, nivel general y, si se confirma, racha y objetivo diario (ver ajuste 4).
 - `GET /gamification/me`. Fórmulas en sección 7. Nada de lenguaje clínico.
+- Implementado así:
+  - Toda sesión completada suma XP, también la evaluación inicial. Saltearla como admin no suma.
+  - El XP se otorga una sola vez por sesión (`session_rewards`).
+  - El umbral del bonus de precisión es configurable (`accuracy-bonus-threshold`).
 
 ### BACK-19 Logros (SCRUM-30)
 - Catálogo `achievements` sembrado (ej. completar 1, 5 y 10 sesiones, alcanzar nivel 3, completar ejercicios de las 3 categorías). Evaluador que escucha `SessionCompletedEvent`.
 - `GET /achievements` con estado de cada uno.
+- Implementado así:
+  - Tipos de condición: `sessions_completed`, `level_reached` y `categories_practiced`.
+  - Un logro nuevo de esos tipos es solo una fila. Un tipo nuevo requiere código en `AchievementRules`.
 
 ### BACK-21 Métricas internas (SCRUM-31)
 - Todos los eventos se registran **del lado servidor** en `events`: `user_registered`, `onboarding_completed`, `assessment_completed`, `session_generated`, `session_started`, `session_completed`, `session_abandoned`, `difficulty_adapted`.
@@ -249,6 +270,7 @@ mentia:
     min-items-for-adaptation: 2     # ítems de la categoría en la sesión para ajustar nivel
     selection:
       weak-category-boost: 1.0  # peso = 1 + boost * (100 - score) / 100
+      max-items: 12             # tope de ítems por sesión
     rotation:
       lookback-sessions: 5
       avoid-last-session: true
@@ -256,8 +278,13 @@ mentia:
   gamification:
     xp-per-session: 10
     xp-per-item: 2
-    xp-accuracy-bonus: 5        # si accuracy de la sesión >= 0.8
+    xp-accuracy-bonus: 5        # si accuracy de la sesión >= accuracy-bonus-threshold
+    accuracy-bonus-threshold: 0.8
     xp-per-level-factor: 100    # pasar del nivel n al n+1 requiere 100 * n XP
+  progress:
+    time-zone: America/Argentina/Buenos_Aires
+    streaks-enabled: true
+    daily-goal-sessions: 0      # 0 = sin objetivo diario
 ```
 
 **Nivel inicial desde la evaluación** (`accuracy` promedio por categoría): `>= 0.90` → 5, `>= 0.75` → 4, `>= 0.60` → 3, `>= 0.40` → 2, resto → 1. El score inicial se calcula como `100 × accuracy`.
