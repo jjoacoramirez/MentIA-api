@@ -41,7 +41,8 @@ public class SessionController {
     public ResponseEntity<SessionResponse> create(@AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody(required = false) CreateSessionRequest request) {
         Integer minutes = request != null ? request.durationMinutes() : null;
-        SessionGenerationService.Generated generated = generationService.create(user.userId(), minutes);
+        String category = request != null ? request.category() : null;
+        SessionGenerationService.Generated generated = generationService.create(user.userId(), minutes, category);
         return ResponseEntity.status(generated.created() ? HttpStatus.CREATED : HttpStatus.OK).body(generated.session());
     }
 

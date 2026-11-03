@@ -197,8 +197,9 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - El refuerzo de una categoría con precisión baja se da a través del score: baja, y en la próxima sesión la categoría pesa más en la selección.
 
 ### BACK-09 Generación de sesión (SCRUM-23)
-- `POST /sessions {durationMinutes}`. Si no hay evaluación inicial completada: `409 ASSESSMENT_REQUIRED`.
-- Si ya hay una sesión de entrenamiento `GENERATED` o `IN_PROGRESS` no vencida, la devuelve (`200`).
+- `POST /sessions {durationMinutes, category}`. Si no hay evaluación inicial completada: `409 ASSESSMENT_REQUIRED`.
+- `category` es opcional: si se indica (código de una categoría activa del MVP), la sesión solo trae ejercicios de esa categoría y solo ajusta su nivel. Desde la pantalla de Juegos se entrena un área por vez.
+- Si ya hay una sesión de entrenamiento `GENERATED` o `IN_PROGRESS` no vencida, la devuelve (`200`). Excepción: si se pide una `category` y la abierta tiene ejercicios de otras, la abierta se abandona y se genera una nueva.
 - Cantidad de ítems: se llena el presupuesto de tiempo sumando `estimated_seconds` del nivel correspondiente.
 - Selección de categorías y rotación según sección 7. Nivel de cada ítem = nivel actual del usuario en la categoría.
 - Devuelve `rationale`: lista estructurada de motivos con texto en es-AR no clínico (lo necesita FRONT-22).

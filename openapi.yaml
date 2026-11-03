@@ -259,7 +259,9 @@ paths:
       summary: Generar una sesion de entrenamiento (BACK-09)
       description: |
         Requiere evaluacion inicial completada (409 ASSESSMENT_REQUIRED). Si hay una sesion de
-        entrenamiento GENERATED o IN_PROGRESS no vencida, la devuelve con 200.
+        entrenamiento GENERATED o IN_PROGRESS no vencida, la devuelve con 200; si se pide una `category`
+        y la abierta tiene ejercicios de otras categorias, la abierta se abandona y se genera una nueva (201).
+        Una `category` desconocida responde 400 VALIDATION_ERROR.
       requestBody:
         required: false
         content:
@@ -914,6 +916,11 @@ components:
           minimum: 5
           maximum: 30
           description: Si se omite, se usa `sessionMinutes` del perfil.
+        category:
+          type: string
+          description: |
+            Codigo de una categoria activa del MVP. Si se indica, la sesion solo trae ejercicios de esa
+            categoria. Si se omite, se usan todas.
 
     SessionItem:
       type: object

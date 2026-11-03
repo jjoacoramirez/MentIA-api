@@ -152,6 +152,36 @@ class TrainingSessionFlowIntegrationTest extends IntegrationTest {
                 .get("id").asText()).isNotEqualTo(id);
     }
 
+    @Test
+    void conUnaCategoriaSoloTraeEjerciciosDeEsaYReemplazaLaAbiertaSiEsDeOtras() throws Exception {
+        api.skipAssessment(user);
+        String general = api.json(api.perform(user, post("/api/v1/sessions")).andExpect(status().isCreated()))
+                .get("id").asText();
+
+        JsonNode focused = api.json(api.perform(user, post("/api/v1/sessions")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"category\": \"ATENCION\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(matchesContract()));
+        assertThat(list(focused.get("items"))).isNotEmpty()
+                .allSatisfy(i -> assertThat(i.get("category").asText()).isEqualTo("ATENCION"));
+        api.perform(user, get("/api/v1/sessions/{id}", general)).andExpect(jsonPath("$.status").value("ABANDONED"));
+
+        // La misma categoría, o sin categoría, retoma la abierta.
+        String id = focused.get("id").asText();
+        api.perform(user, post("/api/v1/sessions")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"category\": \"ATENCION\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id));
+        api.perform(user, post("/api/v1/sessions")).andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));
+
+        api.perform(user, post("/api/v1/sessions")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"category\": \"NO_EXISTE\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].field").value("category"))
+                .andExpect(matchesContract());
+    }
+
     private JsonNode playAndComplete(double accuracy) throws Exception {
         JsonNode session = api.json(api.perform(user, post("/api/v1/sessions")).andExpect(status().isCreated()));
         String id = session.get("id").asText();
