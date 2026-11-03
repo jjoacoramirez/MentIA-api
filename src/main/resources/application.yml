@@ -59,6 +59,11 @@ mentia:
         - { min-accuracy: 0.60, level: 3 }
         - { min-accuracy: 0.40, level: 2 }
         - { min-accuracy: 0.00, level: 1 }
+    selection:
+      # Peso de una categoría al repartir ítems: 1 + boost × (100 − score) / 100. Ninguna queda en 0.
+      weak-category-boost: 1.0
+      # Tope de ítems por sesión, aunque sobre tiempo.
+      max-items: 12
     rotation:
       # Cuántas sesiones hacia atrás se miran para penalizar lo usado recientemente.
       lookback-sessions: 5

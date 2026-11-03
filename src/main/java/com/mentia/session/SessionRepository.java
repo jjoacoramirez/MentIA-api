@@ -33,4 +33,7 @@ public interface SessionRepository extends JpaRepository<TrainingSession, UUID> 
     }
 
     boolean existsByUserIdAndTypeAndStatus(UUID userId, SessionType type, SessionStatus status);
+
+    Optional<TrainingSession> findFirstByUserIdAndTypeAndStatusOrderByFinishedAtDesc(UUID userId, SessionType type,
+            SessionStatus status);
 }
