@@ -30,12 +30,12 @@ public class GamificationService implements SessionRewardsQuery {
 
     private final UserProgressRepository progressRepository;
     private final SessionRewardRepository rewardRepository;
-    private final AchievementLookup achievements;
+    private final AchievementService achievements;
     private final XpPolicy xpPolicy;
     private final Clock clock;
 
     public GamificationService(UserProgressRepository progressRepository, SessionRewardRepository rewardRepository,
-            AchievementLookup achievements, XpPolicy xpPolicy, Clock clock) {
+            AchievementService achievements, XpPolicy xpPolicy, Clock clock) {
         this.progressRepository = progressRepository;
         this.rewardRepository = rewardRepository;
         this.achievements = achievements;
