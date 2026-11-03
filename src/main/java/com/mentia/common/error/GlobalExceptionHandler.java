@@ -10,7 +10,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -72,17 +77,43 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, problem, headers, HttpStatus.BAD_REQUEST, request);
     }
 
+    /** Restricciones sobre {@code @RequestParam} y {@code @PathVariable} (por ejemplo, {@code size} fuera de rango). */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(HandlerMethodValidationException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        List<ProblemDetails.FieldError> errors = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> new ProblemDetails.FieldError(parameterName(result.getMethodParameter()),
+                                error.getDefaultMessage())))
+                .toList();
+        ProblemDetail problem = ProblemDetails.validation("Hay parámetros inválidos.", errors);
+        return handleExceptionInternal(ex, problem, headers, HttpStatus.BAD_REQUEST, request);
+    }
+
     /**
      * Pasa por acá todo error de Spring MVC: garantiza que el ProblemDetail siempre lleve {@code code}.
+     * Algunos handlers de Spring pasan el body en null y lo arma el propio error; acá se arma antes para poder
+     * agregarle el código.
      */
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
             HttpStatusCode statusCode, WebRequest request) {
+        if (body == null && ex instanceof ErrorResponse errorResponse) {
+            body = errorResponse.updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+        }
         if (body instanceof ProblemDetail problem && (problem.getProperties() == null
                 || !problem.getProperties().containsKey(ProblemDetails.CODE))) {
             problem.setProperty(ProblemDetails.CODE, defaultCodeFor(statusCode).name());
         }
         return super.handleExceptionInternal(ex, body, headers, statusCode, request);
+    }
+
+    private static String parameterName(MethodParameter parameter) {
+        RequestParam requestParam = parameter.getParameterAnnotation(RequestParam.class);
+        if (requestParam != null && !requestParam.name().isBlank()) {
+            return requestParam.name();
+        }
+        return parameter.getParameterName();
     }
 
     private static String fieldPath(JsonMappingException ex) {
