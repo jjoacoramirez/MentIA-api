@@ -3,9 +3,11 @@ package com.mentia.session;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.UUID;
 
 import org.springframework.context.ApplicationEventPublisher;
@@ -17,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mentia.attempt.AttemptService;
 import com.mentia.attempt.dto.AttemptOutcome;
 import com.mentia.catalog.CatalogService;
+import com.mentia.engine.DifficultyEngine;
 import com.mentia.performance.PerformanceService;
 import com.mentia.performance.dto.CategoryOutcome;
 import com.mentia.session.domain.SessionItem;
@@ -42,17 +45,19 @@ public class SessionLifecycleService {
     private final AttemptService attemptService;
     private final PerformanceService performanceService;
     private final CatalogService catalogService;
+    private final DifficultyEngine difficultyEngine;
     private final ApplicationEventPublisher events;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     public SessionLifecycleService(SessionService sessionService, AttemptService attemptService,
-            PerformanceService performanceService, CatalogService catalogService, ApplicationEventPublisher events,
-            ObjectMapper objectMapper, Clock clock) {
+            PerformanceService performanceService, CatalogService catalogService, DifficultyEngine difficultyEngine,
+            ApplicationEventPublisher events, ObjectMapper objectMapper, Clock clock) {
         this.sessionService = sessionService;
         this.attemptService = attemptService;
         this.performanceService = performanceService;
         this.catalogService = catalogService;
+        this.difficultyEngine = difficultyEngine;
         this.events = events;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -81,10 +86,10 @@ public class SessionLifecycleService {
         if (assessment) {
             levelAfter = performanceService.applyInitialAssessment(userId, accuracies(byCategory));
         } else {
-            levelAfter = levelBefore;
+            levelAfter = adaptLevels(session, levelBefore, byCategory);
             Map<UUID, CategoryOutcome> sessionOutcomes = new LinkedHashMap<>();
             accuracies(byCategory).forEach((category, list) ->
-                    sessionOutcomes.put(category, new CategoryOutcome(list, levelBefore.get(category))));
+                    sessionOutcomes.put(category, new CategoryOutcome(list, levelAfter.get(category))));
             performanceService.recordSession(userId, sessionOutcomes);
         }
 
@@ -96,9 +101,7 @@ public class SessionLifecycleService {
             int after = levelAfter.getOrDefault(categoryId, before);
             categories.add(new CategoryResult(code, categoryOutcomes.size(), meanAccuracy(categoryOutcomes),
                     meanResponseTime(categoryOutcomes), before, after));
-            if (assessment) {
-                adaptations.add(Adaptation.between(code, before, after));
-            }
+            adaptations.add(Adaptation.between(code, before, after));
         });
 
         int correct = (int) outcomes.stream().filter(AttemptOutcome::correct).count();
@@ -113,6 +116,28 @@ public class SessionLifecycleService {
             events.publishEvent(new AssessmentCompletedEvent(userId, sessionId, now));
         }
         return result;
+    }
+
+    /** Nivel con el que sigue cada categoría según el motor adaptativo (BACK-10). */
+    private Map<UUID, Integer> adaptLevels(TrainingSession session, Map<UUID, Integer> levelBefore,
+            Map<UUID, List<AttemptOutcome>> byCategory) {
+        Map<UUID, Integer> targetByItem = new HashMap<>();
+        session.getItems().forEach(item -> {
+            if (item.getTargetResponseMs() != null) {
+                targetByItem.put(item.getId(), item.getTargetResponseMs());
+            }
+        });
+        Map<UUID, Integer> levels = new LinkedHashMap<>();
+        byCategory.forEach((categoryId, list) -> {
+            OptionalDouble timeRatio = list.stream()
+                    .filter(o -> targetByItem.containsKey(o.sessionItemId()))
+                    .mapToDouble(o -> (double) o.responseTimeMs() / targetByItem.get(o.sessionItemId()))
+                    .average();
+            DifficultyEngine.CategoryStats stats = new DifficultyEngine.CategoryStats(list.size(), meanAccuracy(list),
+                    timeRatio.isPresent() ? timeRatio.getAsDouble() : null);
+            levels.put(categoryId, difficultyEngine.nextLevel(levelBefore.get(categoryId), stats).level());
+        });
+        return levels;
     }
 
     private static Map<UUID, List<Double>> accuracies(Map<UUID, List<AttemptOutcome>> byCategory) {

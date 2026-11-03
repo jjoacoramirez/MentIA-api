@@ -192,6 +192,9 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - `DifficultyEngine.nextLevel(currentLevel, categoryStats)` como función pura con reglas de la sección 7. Todo parametrizado en `mentia.engine`.
 - Tests unitarios dirigidos por tabla (casos de borde: nivel mínimo y máximo, pocas muestras, respuesta lenta).
 - **Los umbrales de la sección 7 son una propuesta. El ticket pide definirlos y documentarlos antes de implementar: validarlos con el equipo primero.**
+- Implementado con los valores propuestos (`mentia.engine.accuracy-up`, `accuracy-down`, `response-time-tolerance`, `min-items-for-adaptation`). **Siguen pendientes de validación con el equipo.** Cambiarlos es solo editar `application.yml`.
+- Cuando una categoría tiene ejercicios con distinto tiempo objetivo, el tiempo se compara como el promedio de `respuesta / objetivo` de los intentos que tienen objetivo.
+- El refuerzo de una categoría con precisión baja se da a través del score: baja, y en la próxima sesión la categoría pesa más en la selección.
 
 ### BACK-09 Generación de sesión (SCRUM-23)
 - `POST /sessions {durationMinutes}`. Si no hay evaluación inicial completada: `409 ASSESSMENT_REQUIRED`.
