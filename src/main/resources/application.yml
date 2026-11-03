@@ -43,6 +43,8 @@ mentia:
     initial-level: 3
     level-min: 1
     level-max: 10
+    # Peso de la sesión nueva en el score: score = score × (1 − α) + scoreSesión × α.
+    ema-alpha: 0.3
     assessment:
       exercises-per-category: 2
       # Nivel inicial según la precisión promedio por categoría: se toma el primer umbral alcanzado.

@@ -114,6 +114,13 @@ class AssessmentFlowIntegrationTest extends IntegrationTest {
                 .containsExactly("ATENCION:5:95:2", "MEMORIA_TRABAJO:1:30:2", "MEMORIA_VISUAL:3:70:2");
 
         auth(get("/api/v1/profile")).andExpect(jsonPath("$.assessmentCompleted").value(true));
+        auth(get("/api/v1/profile/performance"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categories.length()").value(3))
+                .andExpect(jsonPath("$.categories[0].category").value("ATENCION"))
+                .andExpect(jsonPath("$.categories[0].level").value(5))
+                .andExpect(jsonPath("$.categories[0].score").value(95.0))
+                .andExpect(matchesContract());
         assertThat(events.stream(AssessmentCompletedEvent.class)).hasSize(1);
 
         // Una sesión cerrada no se cierra de nuevo ni acepta intentos.

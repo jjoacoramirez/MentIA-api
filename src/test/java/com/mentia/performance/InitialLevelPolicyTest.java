@@ -20,7 +20,7 @@ class InitialLevelPolicyTest {
             new Threshold(0.00, 1),
             new Threshold(0.75, 4),
             new Threshold(0.40, 2)));
-    private static final EngineProperties ENGINE = new EngineProperties(3, 1, 10);
+    private static final EngineProperties ENGINE = new EngineProperties(3, 1, 10, 0.3);
 
     private final InitialLevelPolicy policy = new InitialLevelPolicy(ASSESSMENT, ENGINE);
 

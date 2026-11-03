@@ -18,6 +18,7 @@ import com.mentia.attempt.AttemptService;
 import com.mentia.attempt.dto.AttemptOutcome;
 import com.mentia.catalog.CatalogService;
 import com.mentia.performance.PerformanceService;
+import com.mentia.performance.dto.CategoryOutcome;
 import com.mentia.session.domain.SessionItem;
 import com.mentia.session.domain.SessionStatus;
 import com.mentia.session.domain.SessionType;
@@ -76,9 +77,16 @@ public class SessionLifecycleService {
         outcomes.forEach(o -> byCategory.computeIfAbsent(o.categoryId(), c -> new ArrayList<>()).add(o));
 
         boolean assessment = session.getType() == SessionType.INITIAL_ASSESSMENT;
-        Map<UUID, Integer> levelAfter = assessment
-                ? performanceService.applyInitialAssessment(userId, accuracies(byCategory))
-                : levelBefore;
+        Map<UUID, Integer> levelAfter;
+        if (assessment) {
+            levelAfter = performanceService.applyInitialAssessment(userId, accuracies(byCategory));
+        } else {
+            levelAfter = levelBefore;
+            Map<UUID, CategoryOutcome> sessionOutcomes = new LinkedHashMap<>();
+            accuracies(byCategory).forEach((category, list) ->
+                    sessionOutcomes.put(category, new CategoryOutcome(list, levelBefore.get(category))));
+            performanceService.recordSession(userId, sessionOutcomes);
+        }
 
         List<CategoryResult> categories = new ArrayList<>();
         List<Adaptation> adaptations = new ArrayList<>();

@@ -49,6 +49,16 @@ public class PerformanceProfile {
         this.updatedAt = now;
     }
 
+    /**
+     * Suma una sesión: el score se suaviza con media móvil exponencial y el nivel es el que decidió el motor.
+     */
+    public void recordSession(double sessionScore, int items, int newLevel, double emaAlpha, Instant now) {
+        this.score = score * (1 - emaAlpha) + sessionScore * emaAlpha;
+        this.samples += items;
+        this.level = (short) newLevel;
+        this.updatedAt = now;
+    }
+
     public UUID getUserId() {
         return id.userId();
     }
