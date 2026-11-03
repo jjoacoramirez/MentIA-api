@@ -22,6 +22,7 @@ import com.mentia.catalog.domain.Modality;
 class CatalogContractTest {
 
     private static final Path MIGRATION = Path.of("src/main/resources/db/migration/V3__catalog_exercises.sql");
+    private static final Path VARIANTS_MIGRATION = Path.of("src/main/resources/db/migration/V7__exercise_variants.sql");
 
     @Test
     void exerciseTypeCoincideConElContrato() throws IOException {
@@ -42,6 +43,18 @@ class CatalogContractTest {
             assertThat(sql.split(java.util.regex.Pattern.quote(when), -1).length - 1)
                     .as("ramas CASE para %s", type)
                     .isGreaterThanOrEqualTo(2);
+        }
+    }
+
+    @Test
+    void cadaMecanicaActivaTieneAlMenosTresVariantesEnElSeed() throws IOException {
+        String sql = Files.readString(VARIANTS_MIGRATION);
+        for (ExerciseType type : ExerciseType.values()) {
+            if (type == ExerciseType.AUDITORY_SEQUENCE) {
+                continue; // Inactivo en el seed de BACK-04.
+            }
+            long variants = sql.lines().filter(line -> line.strip().startsWith("('" + type.name() + "',")).count();
+            assertThat(variants).as("variantes de %s", type).isGreaterThanOrEqualTo(3);
         }
     }
 
