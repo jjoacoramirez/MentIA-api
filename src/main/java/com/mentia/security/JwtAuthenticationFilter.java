@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -38,7 +39,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             jwtService.parse(header.substring(BEARER.length()).trim())
                     .filter(user -> !revocationService.isRevoked(user))
                     .ifPresent(user -> SecurityContextHolder.getContext().setAuthentication(
-                            new UsernamePasswordAuthenticationToken(user, null, List.of())));
+                            new UsernamePasswordAuthenticationToken(user, null,
+                                    List.of(new SimpleGrantedAuthority(user.role().authority())))));
         }
         chain.doFilter(request, response);
     }

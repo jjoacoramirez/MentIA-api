@@ -22,7 +22,7 @@ class JwtServiceTest {
     void elTokenEmitidoSeValidaConSusClaims() {
         UUID userId = UUID.randomUUID();
 
-        JwtService.IssuedToken issued = service.issue(userId, 3);
+        JwtService.IssuedToken issued = service.issue(userId, 3, Role.USER);
 
         AuthenticatedUser user = service.parse(issued.token()).orElseThrow();
         assertThat(user.userId()).isEqualTo(userId);
@@ -34,29 +34,38 @@ class JwtServiceTest {
     }
 
     @Test
+    void elRolViajaEnElToken() {
+        AuthenticatedUser admin = service.parse(service.issue(UUID.randomUUID(), 0, Role.ADMIN).token()).orElseThrow();
+        AuthenticatedUser user = service.parse(service.issue(UUID.randomUUID(), 0, Role.USER).token()).orElseThrow();
+
+        assertThat(admin.role()).isEqualTo(Role.ADMIN);
+        assertThat(user.role()).isEqualTo(Role.USER);
+    }
+
+    @Test
     void cadaTokenTieneUnJtiDistinto() {
         UUID userId = UUID.randomUUID();
-        String first = service.parse(service.issue(userId, 0).token()).orElseThrow().jti();
-        String second = service.parse(service.issue(userId, 0).token()).orElseThrow().jti();
+        String first = service.parse(service.issue(userId, 0, Role.USER).token()).orElseThrow().jti();
+        String second = service.parse(service.issue(userId, 0, Role.USER).token()).orElseThrow().jti();
         assertThat(first).isNotEqualTo(second);
     }
 
     @Test
     void unTokenVencidoSeRechaza() {
-        String token = service.issue(UUID.randomUUID(), 0).token();
+        String token = service.issue(UUID.randomUUID(), 0, Role.USER).token();
         JwtService later = jwtAt(NOW.plus(Duration.ofHours(25)), SECRET);
         assertThat(later.parse(token)).isEmpty();
     }
 
     @Test
     void unTokenFirmadoConOtroSecretoSeRechaza() {
-        String token = jwtAt(NOW, "otro-secreto-de-prueba-con-mas-de-32-bytes").issue(UUID.randomUUID(), 0).token();
+        String token = jwtAt(NOW, "otro-secreto-de-prueba-con-mas-de-32-bytes").issue(UUID.randomUUID(), 0, Role.USER).token();
         assertThat(service.parse(token)).isEmpty();
     }
 
     @Test
     void unTokenAlteradoSeRechaza() {
-        String token = service.issue(UUID.randomUUID(), 0).token();
+        String token = service.issue(UUID.randomUUID(), 0, Role.USER).token();
         String[] parts = token.split("\\.");
         String tampered = parts[0] + "." + parts[1] + "x." + parts[2];
         assertThat(service.parse(tampered)).isEmpty();

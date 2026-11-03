@@ -80,8 +80,8 @@ class SessionHistoryIntegrationTest extends IntegrationTest {
                 VALUES (?, ?, 'TRAINING', 'COMPLETED', 10, ?)""", session, user, Timestamp.from(createdAt));
         jdbc.update("""
                 INSERT INTO session_items (id, session_id, position, exercise_id, variant_id, category_id,
-                                           difficulty_level, seed, params)
-                VALUES (?, ?, 1, ?, ?, (SELECT id FROM categories WHERE code = ?), 3, 1, '{}'::jsonb)""",
+                                           difficulty_level, seed, params, estimated_seconds)
+                VALUES (?, ?, 1, ?, ?, (SELECT id FROM categories WHERE code = ?), 3, 1, '{}'::jsonb, 60)""",
                 UUID.randomUUID(), session, exercise.id(), variant.id(), exercise.categoryCode());
     }
 

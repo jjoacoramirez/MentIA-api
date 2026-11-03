@@ -18,14 +18,15 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
 /**
- * Emite y valida JWT HS256 con {@code sub} = userId, {@code jti}, {@code iat}, {@code exp} y {@code ver}
- * (versión de tokens del usuario).
+ * Emite y valida JWT HS256 con {@code sub} = userId, {@code jti}, {@code iat}, {@code exp}, {@code ver}
+ * (versión de tokens del usuario) y {@code role}.
  */
 @Service
 public class JwtService {
 
     static final int MIN_SECRET_BYTES = 32;
     static final String VERSION_CLAIM = "ver";
+    static final String ROLE_CLAIM = "role";
 
     private final SecretKey key;
     private final Duration ttl;
@@ -42,7 +43,7 @@ public class JwtService {
         this.clock = clock;
     }
 
-    public IssuedToken issue(UUID userId, int tokenVersion) {
+    public IssuedToken issue(UUID userId, int tokenVersion, Role role) {
         Instant now = clock.instant();
         String token = Jwts.builder()
                 .subject(userId.toString())
@@ -50,6 +51,7 @@ public class JwtService {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(ttl)))
                 .claim(VERSION_CLAIM, tokenVersion)
+                .claim(ROLE_CLAIM, role.name())
                 .signWith(key, Jwts.SIG.HS256)
                 .compact();
         return new IssuedToken(token, ttl.toSeconds());
@@ -65,12 +67,14 @@ public class JwtService {
                     .parseSignedClaims(token)
                     .getPayload();
             Integer version = claims.get(VERSION_CLAIM, Integer.class);
-            if (claims.getSubject() == null || claims.getId() == null || version == null
+            String role = claims.get(ROLE_CLAIM, String.class);
+            if (claims.getSubject() == null || claims.getId() == null || version == null || role == null
                     || claims.getIssuedAt() == null || claims.getExpiration() == null) {
                 return Optional.empty();
             }
             return Optional.of(new AuthenticatedUser(UUID.fromString(claims.getSubject()), claims.getId(),
-                    claims.getIssuedAt().toInstant(), claims.getExpiration().toInstant(), version));
+                    claims.getIssuedAt().toInstant(), claims.getExpiration().toInstant(), version,
+                    Role.valueOf(role)));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }

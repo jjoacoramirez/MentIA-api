@@ -10,8 +10,9 @@ info:
     - Todos los endpoints requieren `Authorization: Bearer <JWT>` salvo los marcados como publicos.
     - Los errores usan `application/problem+json` (RFC 7807) con un campo `code` estable.
     - Codigos de error usados: VALIDATION_ERROR, USERNAME_TAKEN, INVALID_CREDENTIALS, INVALID_RECOVERY,
-      UNAUTHORIZED, ASSESSMENT_REQUIRED, SESSION_NOT_FOUND, SESSION_STATE_INVALID, ITEM_NOT_IN_SESSION,
+      UNAUTHORIZED, FORBIDDEN, ASSESSMENT_REQUIRED, SESSION_NOT_FOUND, SESSION_STATE_INVALID, ITEM_NOT_IN_SESSION,
       ATTEMPT_CONFLICT.
+    - Los endpoints marcados "solo ADMIN" son herramientas de debug; con rol USER responden 403 FORBIDDEN.
       Para errores inesperados del servidor se usa ademas INTERNAL_ERROR (500).
     - Los scores y niveles representan desempeno dentro de MentIA. No son mediciones clinicas.
     - Fechas y horas en UTC (ISO 8601).
@@ -230,8 +231,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /assessment/skip:
+    post:
+      tags: [Sesiones]
+      operationId: skipAssessment
+      summary: Saltear la evaluacion inicial (solo ADMIN, debug)
+      description: |
+        Herramienta de debug. Deja el nivel minimo en todas las categorias del MVP y abandona la evaluacion
+        abierta si la hay. No marca la evaluacion como completada (`assessmentCompleted` sigue en false).
+      responses:
+        '204':
+          description: Niveles iniciales por defecto aplicados
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /sessions:
     post:
@@ -550,6 +569,12 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: El usuario no tiene el rol necesario
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
     NotFound:
       description: Recurso inexistente o de otro usuario
       content:
@@ -646,7 +671,7 @@ components:
 
     TokenResponse:
       type: object
-      required: [accessToken, tokenType, expiresIn]
+      required: [accessToken, tokenType, expiresIn, role]
       properties:
         accessToken:
           type: string
@@ -657,6 +682,10 @@ components:
           type: integer
           description: Segundos hasta el vencimiento
           example: 86400
+        role:
+          type: string
+          enum: [USER, ADMIN]
+          description: ADMIN habilita herramientas de debug (por ejemplo, saltear la evaluacion). Los permisos los controla el servidor.
 
     RecoveryResetRequest:
       type: object

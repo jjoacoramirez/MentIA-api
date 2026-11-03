@@ -17,6 +17,7 @@ import com.mentia.security.AuthenticatedUser;
 import com.mentia.security.JwtService;
 import com.mentia.security.SecurityConfig;
 import com.mentia.security.TokenRevocationService;
+import com.mentia.security.Role;
 
 /**
  * Base para tests de controllers con {@code @WebMvcTest}: carga la cadena de seguridad real con el JWT simulado.
@@ -32,13 +33,21 @@ public abstract class WebLayerTest {
     protected TokenRevocationService revocationService;
 
     protected AuthenticatedUser principalFor(UUID userId) {
+        return principalFor(userId, Role.USER);
+    }
+
+    protected AuthenticatedUser principalFor(UUID userId, Role role) {
         Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-        return new AuthenticatedUser(userId, "jti-" + userId, now, now.plus(1, ChronoUnit.DAYS), 0);
+        return new AuthenticatedUser(userId, "jti-" + userId, now, now.plus(1, ChronoUnit.DAYS), 0, role);
     }
 
     /** Agrega un Bearer que el filtro JWT acepta como el usuario indicado. */
     protected RequestPostProcessor authenticatedAs(UUID userId) {
-        AuthenticatedUser principal = principalFor(userId);
+        return authenticatedAs(userId, Role.USER);
+    }
+
+    protected RequestPostProcessor authenticatedAs(UUID userId, Role role) {
+        AuthenticatedUser principal = principalFor(userId, role);
         String token = "token-" + userId;
         given(jwtService.parse(token)).willReturn(Optional.of(principal));
         return request -> {

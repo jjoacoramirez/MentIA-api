@@ -28,10 +28,12 @@ import com.mentia.catalog.dto.ExerciseDefinition;
 import com.mentia.security.JwtService;
 import com.mentia.session.SessionFactory;
 import com.mentia.session.SessionRepository;
+import com.mentia.session.domain.PlannedItem;
 import com.mentia.session.domain.SessionItem;
 import com.mentia.session.domain.SessionType;
 import com.mentia.session.domain.TrainingSession;
 import com.mentia.support.IntegrationTest;
+import com.mentia.security.Role;
 
 class AttemptIntegrationTest extends IntegrationTest {
 
@@ -68,7 +70,7 @@ class AttemptIntegrationTest extends IntegrationTest {
     @BeforeEach
     void setUp() {
         user = newUser();
-        token = jwtService.issue(user, 0).token();
+        token = jwtService.issue(user, 0, Role.USER).token();
     }
 
     @Test
@@ -174,7 +176,7 @@ class AttemptIntegrationTest extends IntegrationTest {
     }
 
     private TrainingSession create(UUID owner) {
-        List<SessionFactory.PlannedItem> items = catalog.activeExercises("MEMORIA_TRABAJO").stream()
+        List<PlannedItem> items = catalog.activeExercises("MEMORIA_TRABAJO").stream()
                 .map(e -> planned(owner, e))
                 .toList();
         TrainingSession session = sessionFactory.create(owner, SessionType.TRAINING, 10, items, List.of());
@@ -182,10 +184,8 @@ class AttemptIntegrationTest extends IntegrationTest {
         return session;
     }
 
-    private SessionFactory.PlannedItem planned(UUID owner, ExerciseDefinition exercise) {
-        UUID categoryId = jdbc.queryForObject("SELECT id FROM categories WHERE code = ?", UUID.class,
-                exercise.categoryCode());
-        return new SessionFactory.PlannedItem(exercise.id(), variants.pick(owner, exercise.id(), 3).id(), categoryId,
-                3, 42L, Map.of("sequenceLength", 5));
+    private PlannedItem planned(UUID owner, ExerciseDefinition exercise) {
+        return new PlannedItem(exercise.id(), variants.pick(owner, exercise.id(), 3).id(), exercise.categoryId(),
+                3, 42L, Map.of("sequenceLength", 5), 60, null);
     }
 }

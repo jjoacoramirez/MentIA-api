@@ -48,13 +48,15 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/recovery/reset").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Herramientas de debug.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/assessment/skip").hasRole(Role.ADMIN.name())
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> writeProblem(response,
                                 ProblemDetails.of(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHORIZED,
                                         "Necesitás iniciar sesión para acceder a este recurso.")))
                         .accessDeniedHandler((request, response, ex) -> writeProblem(response,
-                                ProblemDetails.of(HttpStatus.FORBIDDEN, ErrorCode.UNAUTHORIZED,
+                                ProblemDetails.of(HttpStatus.FORBIDDEN, ErrorCode.FORBIDDEN,
                                         "No tenés acceso a este recurso."))))
                 .build();
     }

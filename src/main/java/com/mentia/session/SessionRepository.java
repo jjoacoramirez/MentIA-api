@@ -1,6 +1,8 @@
 package com.mentia.session;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
@@ -8,6 +10,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.mentia.session.domain.SessionStatus;
+import com.mentia.session.domain.SessionType;
 import com.mentia.session.domain.TrainingSession;
 
 public interface SessionRepository extends JpaRepository<TrainingSession, UUID> {
@@ -19,4 +23,14 @@ public interface SessionRepository extends JpaRepository<TrainingSession, UUID> 
     /** Filas {@code [sessionId, exerciseId, variantId]} de los ítems de esas sesiones. */
     @Query("select i.session.id, i.exerciseId, i.variantId from SessionItem i where i.session.id in :sessionIds")
     List<Object[]> findItemUsage(@Param("sessionIds") List<UUID> sessionIds);
+
+    List<TrainingSession> findByUserIdAndTypeAndStatusInOrderByCreatedAtDesc(UUID userId, SessionType type,
+            Collection<SessionStatus> statuses);
+
+    default Optional<TrainingSession> findLatestOpen(UUID userId, SessionType type) {
+        return findByUserIdAndTypeAndStatusInOrderByCreatedAtDesc(userId, type,
+                List.of(SessionStatus.GENERATED, SessionStatus.IN_PROGRESS)).stream().findFirst();
+    }
+
+    boolean existsByUserIdAndTypeAndStatus(UUID userId, SessionType type, SessionStatus status);
 }

@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.mentia.security.JwtService;
 import com.mentia.support.IntegrationTest;
+import com.mentia.security.Role;
 
 class CategoriesIntegrationTest extends IntegrationTest {
 
@@ -26,7 +27,7 @@ class CategoriesIntegrationTest extends IntegrationTest {
 
     @Test
     void listaSoloLasCategoriasActivasPrimeroLasDelMvp() throws Exception {
-        String token = jwtService.issue(UUID.randomUUID(), 0).token();
+        String token = jwtService.issue(UUID.randomUUID(), 0, Role.USER).token();
 
         mockMvc.perform(get("/api/v1/categories").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())
