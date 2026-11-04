@@ -189,11 +189,12 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - `GET /profile/performance`: score (0 a 100) y nivel (1 a 10) por categoría. La descripción del schema aclara que es desempeño dentro de MentIA.
 
 ### BACK-10 Motor adaptativo (SCRUM-24)
-- `DifficultyEngine.nextLevel(currentLevel, categoryStats)` como función pura con reglas de la sección 7. Todo parametrizado en `mentia.engine`.
+- `DifficultyEngine.next(currentLevel, currentProgress, activities)` como función pura con reglas de la sección 7. Todo parametrizado en `mentia.engine`.
 - Tests unitarios dirigidos por tabla (casos de borde: nivel mínimo y máximo, pocas muestras, respuesta lenta).
 - **Los umbrales de la sección 7 son una propuesta. El ticket pide definirlos y documentarlos antes de implementar: validarlos con el equipo primero.**
-- Implementado con los valores propuestos (`mentia.engine.accuracy-up`, `accuracy-down`, `response-time-tolerance`, `min-items-for-adaptation`). **Siguen pendientes de validación con el equipo.** Cambiarlos es solo editar `application.yml`.
-- Cuando una categoría tiene ejercicios con distinto tiempo objetivo, el tiempo se compara como el promedio de `respuesta / objetivo` de los intentos que tienen objetivo.
+- Implementado con los valores propuestos (`mentia.engine.accuracy-up`, `accuracy-down`, `response-time-tolerance` y `level-progress.*`). **Siguen pendientes de validación con el equipo.** Cambiarlos es solo editar `application.yml`.
+- Progreso dentro del nivel (decisión posterior, reemplaza el mínimo de 2 ítems por categoría): con ese mínimo, en una sesión combinada las categorías con un solo ítem nunca se ajustaban. Ahora cada actividad suma o resta puntos y el progreso se acumula entre sesiones (`performance_profiles.level_progress`, V14). Se expone en `GET /profile/performance` (`progress`) y en el resultado de la sesión (`levelProgressBefore` y `levelProgressAfter`).
+- El tiempo se compara por actividad: `respuesta / objetivo` de cada intento que tiene objetivo.
 - El refuerzo de una categoría con precisión baja se da a través del score: baja, y en la próxima sesión la categoría pesa más en la selección.
 
 ### BACK-09 Generación de sesión (SCRUM-23)
@@ -267,8 +268,12 @@ mentia:
     ema-alpha: 0.3              # peso de la sesión nueva en el score
     accuracy-up: 0.85           # subir nivel si accuracy >= este valor
     accuracy-down: 0.60         # bajar nivel si accuracy < este valor
-    response-time-tolerance: 1.25   # tiempo promedio <= target * tolerancia para poder subir
-    min-items-for-adaptation: 2     # ítems de la categoría en la sesión para ajustar nivel
+    response-time-tolerance: 1.25   # tiempo <= target * tolerancia para sumar todos los puntos
+    level-progress:
+      start: 50                 # progreso (0 a 100) al entrar a un nivel
+      points-up: 25             # actividad con accuracy >= accuracy-up y a tiempo
+      points-up-slow: 10        # actividad con accuracy >= accuracy-up pero lenta
+      points-down: 25           # lo que resta una actividad con accuracy < accuracy-down
     selection:
       weak-category-boost: 1.0  # peso = 1 + boost * (100 - score) / 100
       max-items: 12             # tope de ítems por sesión
@@ -292,11 +297,16 @@ mentia:
 
 **Score de desempeño por categoría:** `scoreSesión = 100 × promedio(accuracy)` de los ítems de esa categoría. `score = score × (1 − α) + scoreSesión × α`.
 
-**Ajuste de nivel por categoría al completar una sesión:**
-- Si hay menos de `min-items-for-adaptation` ítems de la categoría → mantener.
-- `accuracy >= accuracy-up` y (el ejercicio no tiene `target_response_ms` o el tiempo promedio `<= target × tolerancia`) → subir 1 (tope `level-max`).
-- `accuracy < accuracy-down` → bajar 1 (piso `level-min`) y la categoría queda reforzada (mayor peso en la próxima selección).
-- En cualquier otro caso → mantener.
+**Ajuste de nivel por categoría al completar una sesión (progreso dentro del nivel):**
+- Cada categoría tiene un progreso de 0 (piso) a 100 (techo) dentro de su nivel. Arranca en `level-progress.start` (50) al fijar el punto de partida y cada vez que cambia de nivel.
+- Cada actividad de la categoría en la sesión suma o resta:
+  - `accuracy >= accuracy-up` y (el ejercicio no tiene `target_response_ms` o `tiempo <= target × tolerancia`) → `+points-up` (25).
+  - `accuracy >= accuracy-up` pero más lenta → `+points-up-slow` (10).
+  - `accuracy < accuracy-down` → `−points-down` (25).
+  - En cualquier otro caso → 0.
+- Si el progreso llega a 100 → subir 1 y volver a 50; si llega a 0 → bajar 1 y volver a 50. Una sesión mueve como mucho un nivel. En `level-max` el progreso queda en 100 y en `level-min` en 0.
+- Con los valores propuestos: desde el medio del nivel hacen falta 2 actividades altas para subir (o 2 bajas para bajar); desde cerca del piso (≤ 25) alcanza con una sola actividad baja para bajar, y lo mismo cerca del techo (≥ 75) para subir.
+- Una categoría con precisión baja también baja su score, y en la próxima sesión pesa más en la selección.
 
 **Selección de categorías para una sesión:** primero 1 ítem por categoría MVP activa si caben en el tiempo; el resto por sorteo ponderado con `peso = 1 + boost × (100 − score) / 100`. Las categorías de menor desempeño pesan más, pero ninguna queda excluida.
 

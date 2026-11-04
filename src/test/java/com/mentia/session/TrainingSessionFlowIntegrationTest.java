@@ -92,6 +92,9 @@ class TrainingSessionFlowIntegrationTest extends IntegrationTest {
         for (JsonNode category : list(result.get("categories"))) {
             int expected = category.get("itemsCompleted").asInt() >= 2 ? 2 : 1;
             assertThat(category.get("difficultyLevelAfter").asInt()).as(category.toString()).isEqualTo(expected);
+            // Cada actividad perfecta suma 25 al progreso (arranca en 50): con dos sube de nivel y vuelve a 50.
+            assertThat(category.get("levelProgressBefore").asInt()).isEqualTo(50);
+            assertThat(category.get("levelProgressAfter").asInt()).isEqualTo(expected == 2 ? 50 : 75);
             if (expected == 2) {
                 raised.add(category.get("category").asText());
             }

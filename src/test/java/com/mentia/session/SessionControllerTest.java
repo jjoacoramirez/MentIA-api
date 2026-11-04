@@ -173,7 +173,7 @@ class SessionControllerTest extends WebLayerTest {
     void cerrarDevuelveElResultadoConElContrato() throws Exception {
         given(lifecycleService.complete(USER, SESSION)).willReturn(new SessionResultResponse(SESSION,
                 SessionType.INITIAL_ASSESSMENT, SessionStatus.COMPLETED, 6, 6, 5, 1, 0.83, 9000L,
-                List.of(new CategoryResult("ATENCION", 2, 0.9, 1100, 3, 5)),
+                List.of(new CategoryResult("ATENCION", 2, 0.9, 1100, 3, 5, 75, 50)),
                 List.of(Adaptation.between("ATENCION", 3, 5)), null, null));
 
         mockMvc.perform(post("/api/v1/sessions/{id}/complete", SESSION).with(authenticatedAs(USER)))

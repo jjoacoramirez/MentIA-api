@@ -875,7 +875,7 @@ components:
           type: array
           items:
             type: object
-            required: [category, score, level]
+            required: [category, score, level, progress]
             properties:
               category:
                 type: string
@@ -887,6 +887,13 @@ components:
                 type: integer
                 minimum: 1
                 maximum: 10
+              progress:
+                type: integer
+                minimum: 0
+                maximum: 100
+                description: |
+                  Puntos dentro del nivel: 0 es el piso y 100 el techo. Cada actividad suma o resta; al llegar
+                  a 100 sube un nivel y al llegar a 0 baja uno.
               updatedAt:
                 type: string
                 format: date-time
@@ -1064,6 +1071,18 @@ components:
           type: integer
         difficultyLevelAfter:
           type: integer
+        levelProgressBefore:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: Puntos dentro del nivel antes de la sesion. Null en la evaluacion inicial.
+        levelProgressAfter:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: Puntos dentro del nivel despues de la sesion (en el nivel `difficultyLevelAfter`).
 
     Adaptation:
       type: object
