@@ -12,7 +12,7 @@ info:
     - Codigos de error usados: VALIDATION_ERROR, USERNAME_TAKEN, INVALID_CREDENTIALS, INVALID_RECOVERY,
       UNAUTHORIZED, FORBIDDEN, ASSESSMENT_REQUIRED, SESSION_NOT_FOUND, SESSION_STATE_INVALID, ITEM_NOT_IN_SESSION,
       ATTEMPT_CONFLICT.
-    - Los endpoints marcados "solo ADMIN" son herramientas de debug; con rol USER responden 403 FORBIDDEN.
+    - Los endpoints marcados "solo ADMIN" requieren ese rol; con rol USER responden 403 FORBIDDEN.
       Para errores inesperados del servidor se usa ademas INTERNAL_ERROR (500).
     - Los scores y niveles representan desempeno dentro de MentIA. No son mediciones clinicas.
     - Fechas y horas en UTC (ISO 8601).
@@ -540,6 +540,39 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /admin/metrics:
+    get:
+      tags: [Progreso]
+      operationId: adminMetrics
+      summary: Métricas agregadas de entrenamiento (solo ADMIN)
+      description: |
+        Ventana de días calendario de Buenos Aires incluyendo hoy. Las sesiones se
+        agrupan por fecha de inicio. La comparación usa entrenamientos completados,
+        al menos dos sesiones del mismo ejercicio y el cambio medio por participante.
+      parameters:
+        - name: days
+          in: query
+          schema: {type: integer, enum: [7, 30, 90], default: 30}
+        - name: category
+          in: query
+          schema: {type: string, pattern: '^[A-Z0-9_]{0,40}$'}
+        - name: exercise
+          in: query
+          schema: {type: string, pattern: '^[A-Z0-9_]{0,40}$'}
+      responses:
+        '200':
+          description: Reporte sin identificadores de participantes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMetricsReport'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -589,6 +622,57 @@ components:
             $ref: '#/components/schemas/ProblemDetail'
 
   schemas:
+    AdminMetricsReport:
+      type: object
+      required: [from, to, participants, activity, cohorts, exercises, options]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        participants: {type: integer, format: int64}
+        activity:
+          type: array
+          items:
+            type: object
+            required: [day, active, started, completed, abandoned]
+            properties:
+              day: {type: string, format: date}
+              active: {type: integer, format: int64}
+              started: {type: integer, format: int64}
+              completed: {type: integer, format: int64}
+              abandoned: {type: integer, format: int64}
+        cohorts:
+          type: array
+          items:
+            type: object
+            required: [bucket, participants, comparable, improved, meanChange]
+            properties:
+              bucket: {type: integer, enum: [1, 2, 4]}
+              participants: {type: integer, format: int64}
+              comparable: {type: integer, format: int64}
+              improved: {type: integer, format: int64}
+              meanChange: {type: number, nullable: true}
+        exercises:
+          type: array
+          items:
+            type: object
+            required: [code, name, category, attempts, accuracy, medianMs]
+            properties:
+              code: {type: string}
+              name: {type: string}
+              category: {type: string}
+              attempts: {type: integer, format: int64}
+              accuracy: {type: number}
+              medianMs: {type: number}
+        options:
+          type: array
+          items:
+            type: object
+            required: [code, name, category, categoryName]
+            properties:
+              code: {type: string}
+              name: {type: string}
+              category: {type: string}
+              categoryName: {type: string}
     ProblemDetail:
       type: object
       required: [title, status, code]

@@ -48,6 +48,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/recovery/reset").permitAll()
                         .requestMatchers("/error").permitAll()
+                        .requestMatchers("/api/v1/admin/**").hasRole(Role.ADMIN.name())
                         // Herramientas de debug.
                         .requestMatchers(HttpMethod.POST, "/api/v1/assessment/skip").hasRole(Role.ADMIN.name())
                         .anyRequest().authenticated())
