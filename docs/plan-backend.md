@@ -249,6 +249,7 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - Todos los eventos se registran **del lado servidor** en `events`: `user_registered`, `onboarding_completed`, `assessment_completed`, `session_generated`, `session_started`, `session_completed`, `session_abandoned`, `difficulty_adapted`.
 - Migración con vistas SQL (`v_mvp_metrics_*`) para consultar: usuarios registrados, % que completa la evaluación, sesiones iniciadas, completadas y abandonadas, frecuencia de uso, ejercicios completados y adaptaciones. Sin dashboard.
 - No hay endpoint de eventos para el cliente (ver ajuste 3).
+- Panel admin (agregado después): `GET /api/v1/admin/metrics/consistency`, solo ADMIN. Agrupa a los usuarios por constancia (días con al menos una sesión de entrenamiento completada, en `mentia.metrics.time-zone`; cortes en `mentia.metrics.consistency-groups`) y devuelve por grupo: usuarios, sesiones completadas y abandonadas, precisión de la primera y la última sesión (usuarios con 2 o más) y cambio de nivel por área desde la primera sesión. Solo agregados: no expone alias, UUID ni datos de un usuario, y no se muestra a usuarios comunes (regla 5). Excluye las cuentas ADMIN salvo `include-admins: true`. Con grupos chicos los promedios son poco representativos.
 
 ### BACK-15, 16, 17 Post-MVP
 - No implementar. Solo se mantiene el paquete `episodic/` vacío.

@@ -28,6 +28,7 @@ tags:
   - name: Sesiones
   - name: Progreso
   - name: Gamificacion
+  - name: Admin
 
 paths:
   /auth/register:
@@ -247,6 +248,28 @@ paths:
       responses:
         '204':
           description: Niveles iniciales por defecto aplicados
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/metrics/consistency:
+    get:
+      tags: [Admin]
+      operationId: getConsistencyReport
+      summary: Evolucion del desempeno segun la constancia (solo ADMIN)
+      description: |
+        Agrupa a los usuarios por constancia (dias con al menos una sesion de entrenamiento completada, en
+        `mentia.metrics.time-zone`) y devuelve solo agregados por grupo: nunca datos de un usuario individual ni
+        comparaciones nominales entre usuarios. Por defecto excluye las cuentas ADMIN. Los valores describen el
+        desempeno dentro de MentIA, no capacidades.
+      responses:
+        '200':
+          description: Reporte agregado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsistencyReport'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1051,6 +1074,93 @@ components:
         recordedAt:
           type: string
           format: date-time
+
+    ConsistencyReport:
+      type: object
+      required: [generatedAt, timeZone, totals, groups]
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        timeZone:
+          type: string
+        totals:
+          type: object
+          required: [users, usersWithStartingPoint, usersWithTraining, sessionsCompleted, sessionsAbandoned]
+          properties:
+            users:
+              type: integer
+            usersWithStartingPoint:
+              type: integer
+              description: Usuarios con evaluacion inicial completada (o salteada).
+            usersWithTraining:
+              type: integer
+              description: Usuarios con al menos una sesion de entrenamiento completada.
+            sessionsCompleted:
+              type: integer
+            sessionsAbandoned:
+              type: integer
+            abandonRate:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 1
+        groups:
+          type: array
+          description: El primero es el grupo sin sesiones completadas; despues, de menor a mayor constancia.
+          items:
+            type: object
+            required: [label, minActiveDays, users, sessionsCompleted, sessionsAbandoned, usersWithTrend, categories]
+            properties:
+              label:
+                type: string
+              minActiveDays:
+                type: integer
+              maxActiveDays:
+                type: integer
+                nullable: true
+                description: Null en el ultimo grupo (sin tope).
+              users:
+                type: integer
+              sessionsCompleted:
+                type: integer
+              sessionsAbandoned:
+                type: integer
+              avgSessionsPerUser:
+                type: number
+                nullable: true
+              abandonRate:
+                type: number
+                nullable: true
+              usersWithTrend:
+                type: integer
+                description: Usuarios con al menos dos sesiones completadas (entran en la evolucion de precision).
+              avgFirstAccuracy:
+                type: number
+                nullable: true
+              avgLastAccuracy:
+                type: number
+                nullable: true
+              avgAccuracyDelta:
+                type: number
+                nullable: true
+                description: Promedio de (precision de la ultima sesion - precision de la primera).
+              avgLevelDelta:
+                type: number
+                nullable: true
+                description: Promedio de (nivel actual - nivel de la primera sesion) por usuario y area.
+              categories:
+                type: array
+                items:
+                  type: object
+                  required: [category, users, avgLevelDelta]
+                  properties:
+                    category:
+                      type: string
+                    users:
+                      type: integer
+                    avgLevelDelta:
+                      type: number
 
     CategoryResult:
       type: object

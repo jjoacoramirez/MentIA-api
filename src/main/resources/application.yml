@@ -41,6 +41,11 @@ mentia:
     streaks-enabled: true
     # Sesiones completadas por día como objetivo. 0 = sin objetivo diario (el resumen devuelve dailyGoal: null).
     daily-goal-sessions: 0
+  metrics:
+    # Panel admin: los usuarios se agrupan por días con al menos una sesión completada.
+    time-zone: ${mentia.progress.time-zone}
+    consistency-groups: [1, 2, 4, 8]   # 1 día, 2 a 3, 4 a 7 y 8 o más (más el grupo sin sesiones)
+    include-admins: false              # las cuentas admin son de prueba
   gamification:
     # XP por sesión completada = xp-per-session + xp-per-item × ítems + bonus (si precisión >= accuracy-bonus-threshold).
     xp-per-session: 10
