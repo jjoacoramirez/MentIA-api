@@ -32,13 +32,14 @@ class PerformanceControllerTest extends WebLayerTest {
     void devuelveElDesempenoPorCategoriaConElContrato() throws Exception {
         UUID user = UUID.randomUUID();
         given(performanceService.profile(user)).willReturn(new PerformanceProfileResponse(List.of(
-                new PerformanceProfileResponse.Entry("ATENCION", 72.5, 4, Instant.parse("2026-11-03T10:00:00Z")))));
+                new PerformanceProfileResponse.Entry("ATENCION", 72.5, 4, 35, Instant.parse("2026-11-03T10:00:00Z")))));
 
         mockMvc.perform(get("/api/v1/profile/performance").with(authenticatedAs(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.categories[0].category").value("ATENCION"))
                 .andExpect(jsonPath("$.categories[0].score").value(72.5))
                 .andExpect(jsonPath("$.categories[0].level").value(4))
+                .andExpect(jsonPath("$.categories[0].progress").value(35))
                 .andExpect(matchesContract());
     }
 

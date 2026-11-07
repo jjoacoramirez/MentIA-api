@@ -30,13 +30,19 @@ public record SessionResultResponse(
                 accuracy, totalTimeMs, categories, adaptations, comparison, rewards);
     }
 
+    /**
+     * {@code levelProgressBefore} y {@code levelProgressAfter}: puntos dentro del nivel (0 a 100) antes y después
+     * de la sesión. En la evaluación inicial no hay "antes".
+     */
     public record CategoryResult(
             String category,
             int itemsCompleted,
             double accuracy,
             Integer avgResponseTimeMs,
             int difficultyLevelBefore,
-            int difficultyLevelAfter) {
+            int difficultyLevelAfter,
+            Integer levelProgressBefore,
+            Integer levelProgressAfter) {
     }
 
     public record Adaptation(String category, int from, int to, Direction direction) {

@@ -28,6 +28,7 @@ tags:
   - name: Sesiones
   - name: Progreso
   - name: Gamificacion
+  - name: Admin
 
 paths:
   /auth/register:
@@ -252,6 +253,28 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /admin/metrics/consistency:
+    get:
+      tags: [Admin]
+      operationId: getConsistencyReport
+      summary: Evolucion del desempeno segun la constancia (solo ADMIN)
+      description: |
+        Agrupa a los usuarios por constancia (dias con al menos una sesion de entrenamiento completada, en
+        `mentia.metrics.time-zone`) y devuelve solo agregados por grupo: nunca datos de un usuario individual ni
+        comparaciones nominales entre usuarios. Por defecto excluye las cuentas ADMIN. Los valores describen el
+        desempeno dentro de MentIA, no capacidades.
+      responses:
+        '200':
+          description: Reporte agregado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsistencyReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /sessions:
     post:
       tags: [Sesiones]
@@ -259,7 +282,9 @@ paths:
       summary: Generar una sesion de entrenamiento (BACK-09)
       description: |
         Requiere evaluacion inicial completada (409 ASSESSMENT_REQUIRED). Si hay una sesion de
-        entrenamiento GENERATED o IN_PROGRESS no vencida, la devuelve con 200.
+        entrenamiento GENERATED o IN_PROGRESS no vencida, la devuelve con 200; si se pide una `category`
+        y la abierta tiene ejercicios de otras categorias, la abierta se abandona y se genera una nueva (201).
+        Una `category` desconocida responde 400 VALIDATION_ERROR.
       requestBody:
         required: false
         content:
@@ -873,7 +898,7 @@ components:
           type: array
           items:
             type: object
-            required: [category, score, level]
+            required: [category, score, level, progress]
             properties:
               category:
                 type: string
@@ -885,6 +910,13 @@ components:
                 type: integer
                 minimum: 1
                 maximum: 10
+              progress:
+                type: integer
+                minimum: 0
+                maximum: 100
+                description: |
+                  Puntos dentro del nivel: 0 es el piso y 100 el techo. Cada actividad suma o resta; al llegar
+                  a 100 sube un nivel y al llegar a 0 baja uno.
               updatedAt:
                 type: string
                 format: date-time
@@ -914,6 +946,11 @@ components:
           minimum: 5
           maximum: 30
           description: Si se omite, se usa `sessionMinutes` del perfil.
+        category:
+          type: string
+          description: |
+            Codigo de una categoria activa del MVP. Si se indica, la sesion solo trae ejercicios de esa
+            categoria. Si se omite, se usan todas.
 
     SessionItem:
       type: object
@@ -1038,6 +1075,93 @@ components:
           type: string
           format: date-time
 
+    ConsistencyReport:
+      type: object
+      required: [generatedAt, timeZone, totals, groups]
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        timeZone:
+          type: string
+        totals:
+          type: object
+          required: [users, usersWithStartingPoint, usersWithTraining, sessionsCompleted, sessionsAbandoned]
+          properties:
+            users:
+              type: integer
+            usersWithStartingPoint:
+              type: integer
+              description: Usuarios con evaluacion inicial completada (o salteada).
+            usersWithTraining:
+              type: integer
+              description: Usuarios con al menos una sesion de entrenamiento completada.
+            sessionsCompleted:
+              type: integer
+            sessionsAbandoned:
+              type: integer
+            abandonRate:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 1
+        groups:
+          type: array
+          description: El primero es el grupo sin sesiones completadas; despues, de menor a mayor constancia.
+          items:
+            type: object
+            required: [label, minActiveDays, users, sessionsCompleted, sessionsAbandoned, usersWithTrend, categories]
+            properties:
+              label:
+                type: string
+              minActiveDays:
+                type: integer
+              maxActiveDays:
+                type: integer
+                nullable: true
+                description: Null en el ultimo grupo (sin tope).
+              users:
+                type: integer
+              sessionsCompleted:
+                type: integer
+              sessionsAbandoned:
+                type: integer
+              avgSessionsPerUser:
+                type: number
+                nullable: true
+              abandonRate:
+                type: number
+                nullable: true
+              usersWithTrend:
+                type: integer
+                description: Usuarios con al menos dos sesiones completadas (entran en la evolucion de precision).
+              avgFirstAccuracy:
+                type: number
+                nullable: true
+              avgLastAccuracy:
+                type: number
+                nullable: true
+              avgAccuracyDelta:
+                type: number
+                nullable: true
+                description: Promedio de (precision de la ultima sesion - precision de la primera).
+              avgLevelDelta:
+                type: number
+                nullable: true
+                description: Promedio de (nivel actual - nivel de la primera sesion) por usuario y area.
+              categories:
+                type: array
+                items:
+                  type: object
+                  required: [category, users, avgLevelDelta]
+                  properties:
+                    category:
+                      type: string
+                    users:
+                      type: integer
+                    avgLevelDelta:
+                      type: number
+
     CategoryResult:
       type: object
       required: [category, itemsCompleted, accuracy, difficultyLevelBefore, difficultyLevelAfter]
@@ -1057,6 +1181,18 @@ components:
           type: integer
         difficultyLevelAfter:
           type: integer
+        levelProgressBefore:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: Puntos dentro del nivel antes de la sesion. Null en la evaluacion inicial.
+        levelProgressAfter:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: Puntos dentro del nivel despues de la sesion (en el nivel `difficultyLevelAfter`).
 
     Adaptation:
       type: object

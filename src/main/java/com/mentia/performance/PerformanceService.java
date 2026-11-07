@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.mentia.catalog.CatalogService;
 import com.mentia.catalog.dto.CategoryRef;
+import com.mentia.engine.AdaptationProperties;
 import com.mentia.engine.EngineProperties;
 import com.mentia.performance.domain.PerformanceProfile;
 import com.mentia.performance.dto.CategoryOutcome;
@@ -31,19 +32,21 @@ public class PerformanceService {
     private final InitialLevelPolicy initialLevelPolicy;
     private final CatalogService catalogService;
     private final EngineProperties engine;
+    private final AdaptationProperties adaptation;
     private final Clock clock;
 
     public PerformanceService(PerformanceRepository repository, InitialLevelPolicy initialLevelPolicy,
-            CatalogService catalogService, EngineProperties engine, Clock clock) {
+            CatalogService catalogService, EngineProperties engine, AdaptationProperties adaptation, Clock clock) {
         this.repository = repository;
         this.initialLevelPolicy = initialLevelPolicy;
         this.catalogService = catalogService;
         this.engine = engine;
+        this.adaptation = adaptation;
         this.clock = clock;
     }
 
     /**
-     * Nivel y score iniciales a partir de las precisiones de la evaluación. Una categoría sin intentos
+     * Nivel y score iniciales (con el progreso en el medio del nivel) a partir de las precisiones de la evaluación. Una categoría sin intentos
      * se toma como precisión 0. Reemplaza cualquier punto de partida anterior (por ejemplo, si se repite).
      *
      * @return nivel inicial por categoría
@@ -69,7 +72,7 @@ public class PerformanceService {
     }
 
     /**
-     * Actualiza score (media móvil con {@code ema-alpha}) y nivel de cada categoría después de una sesión.
+     * Actualiza score (media móvil con {@code ema-alpha}), nivel y progreso de cada categoría después de una sesión.
      * Una categoría sin intentos no cambia. Si todavía no tenía perfil (por ejemplo, una categoría agregada
      * después de la evaluación), arranca con el score de esta sesión.
      */
@@ -85,13 +88,13 @@ public class PerformanceService {
             int level = engine.clamp(outcome.newLevel());
             repository.findById(new PerformanceProfile.Key(userId, categoryId)).ifPresentOrElse(
                     profile -> profile.recordSession(sessionScore, outcome.accuracies().size(), level,
-                            engine.emaAlpha(), now),
+                            outcome.newProgress(), engine.emaAlpha(), now),
                     () -> repository.save(new PerformanceProfile(userId, categoryId, sessionScore, level,
-                            outcome.accuracies().size(), now)));
+                            outcome.newProgress(), outcome.accuracies().size(), now)));
         });
     }
 
-    /** Score y nivel actuales por categoría. */
+    /** Score, nivel y progreso actuales por categoría. */
     @Transactional(readOnly = true)
     public Map<UUID, PerformanceSnapshot> current(UUID userId) {
         Map<UUID, PerformanceSnapshot> snapshots = new LinkedHashMap<>();
@@ -111,7 +114,8 @@ public class PerformanceService {
             PerformanceSnapshot snapshot = current.get(category.id());
             if (snapshot != null) {
                 entries.add(new PerformanceProfileResponse.Entry(category.code(),
-                        Math.round(snapshot.score() * 10) / 10.0, snapshot.level(), snapshot.updatedAt()));
+                        Math.round(snapshot.score() * 10) / 10.0, snapshot.level(), snapshot.levelProgress(),
+                        snapshot.updatedAt()));
             }
         }
         return new PerformanceProfileResponse(entries);
@@ -124,8 +128,9 @@ public class PerformanceService {
     }
 
     private void setStartingPoint(UUID userId, UUID categoryId, double score, int level, int samples, Instant now) {
+        int start = adaptation.levelProgress().start();
         repository.findById(new PerformanceProfile.Key(userId, categoryId)).ifPresentOrElse(
-                existing -> existing.reset(score, level, samples, now),
-                () -> repository.save(new PerformanceProfile(userId, categoryId, score, level, samples, now)));
+                existing -> existing.reset(score, level, start, samples, now),
+                () -> repository.save(new PerformanceProfile(userId, categoryId, score, level, start, samples, now)));
     }
 }
