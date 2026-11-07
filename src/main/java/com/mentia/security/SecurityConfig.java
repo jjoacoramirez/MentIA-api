@@ -51,8 +51,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/**").hasRole(Role.ADMIN.name())
                         // Herramientas de debug.
                         .requestMatchers(HttpMethod.POST, "/api/v1/assessment/skip").hasRole(Role.ADMIN.name())
-                        // Panel admin: métricas agregadas.
-                        .requestMatchers("/api/v1/admin/**").hasRole(Role.ADMIN.name())
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) -> writeProblem(response,
