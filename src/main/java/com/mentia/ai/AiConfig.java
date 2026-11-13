@@ -18,34 +18,32 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 public class AiConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AiConfig.class);
-    static final String PROVIDER_ANTHROPIC = "anthropic";
-
     /**
      * Elige el cliente según {@code mentia.ai.*}: sin habilitar o sin key queda {@link DisabledAiClient}.
      * Un proveedor desconocido corta el arranque: es un error de configuración, no un "apagado".
      */
     @Bean
     AiClient aiClient(AiProperties properties) {
+        AiProperties.ProviderSettings settings = properties.active();
         if (!properties.enabled()) {
             log.info("AI is disabled (mentia.ai.enabled=false)");
             return new DisabledAiClient("AI is disabled");
         }
-        if (!PROVIDER_ANTHROPIC.equalsIgnoreCase(properties.provider())) {
-            throw new IllegalStateException("Unknown mentia.ai.provider: " + properties.provider());
-        }
         if (properties.apiKey() == null || properties.apiKey().isBlank()) {
-            log.warn("mentia.ai.enabled=true but ANTHROPIC_API_KEY is empty: AI stays disabled");
+            log.warn("mentia.ai.enabled=true but MENTIA_AI_API_KEY is empty: AI stays disabled");
             return new DisabledAiClient("AI API key is not configured");
         }
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(properties.connectTimeout());
         requestFactory.setReadTimeout(properties.readTimeout());
         RestClient restClient = RestClient.builder()
-                .baseUrl(properties.baseUrl())
+                .baseUrl(settings.baseUrl())
                 .requestFactory(requestFactory)
                 .build();
-        log.info("AI enabled with provider={} model={}", properties.provider(), properties.model());
-        return new AnthropicAiClient(restClient, properties);
+        log.info("AI enabled with provider={} model={}", properties.provider(), settings.model());
+        return AiProperties.ANTHROPIC.equalsIgnoreCase(properties.provider())
+                ? new AnthropicAiClient(restClient, properties)
+                : new OpenAiClient(restClient, properties);
     }
 
     @Bean

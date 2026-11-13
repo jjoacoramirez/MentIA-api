@@ -18,9 +18,19 @@ Copiar `.env.example` a `.env` y completar. `docker compose` lee `.env` solo; pa
 | `MENTIA_DB_NAME` | Nombre de la base (docker compose) | `mentia` |
 | `MENTIA_DB_URL` | URL JDBC | `jdbc:postgresql://localhost:5432/mentia` |
 | `MENTIA_JWT_SECRET` | Secreto HS256 del JWT (mínimo 32 caracteres) | obligatoria |
-| `ANTHROPIC_API_KEY` | Key de la API de Anthropic (IA). Solo la lee el backend | opcional (vacía = IA deshabilitada) |
+| `MENTIA_AI_ENABLED` | Activa la capa de IA | `false` |
+| `MENTIA_AI_PROVIDER` | `openai` o `anthropic` | `openai` |
+| `MENTIA_AI_API_KEY` | Key del proveedor elegido (OpenAI empieza con `sk-proj-` o `sk-`, Anthropic con `sk-ant-`). Solo la lee el backend | opcional (vacía = IA deshabilitada) |
 
-`ANTHROPIC_API_KEY` tiene que estar en el entorno de la terminal (o en la run configuration del IDE) desde donde corrés `./mvnw spring-boot:run`: docker compose solo levanta la base y `./mvnw` no lee `.env`. Además de la key hay que activar la IA con `MENTIA_AI_ENABLED=true` (por defecto está apagada y la API funciona igual). Nunca se commitea; usá keys distintas para dev y prod.
+Las variables de IA tienen que estar en el entorno de la terminal (o en la run configuration del IDE) desde donde corrés `./mvnw`: docker compose solo levanta la base y `./mvnw` no lee `.env`. Sin key, la IA queda apagada y la API funciona igual. La key nunca se commitea; usá keys distintas para dev y prod, con tope de gasto en la consola del proveedor.
+
+Para probar la key con una llamada real (cuesta una fracción de centavo), con Docker abierto:
+
+```powershell
+$env:MENTIA_AI_API_KEY = "tu-key"
+$env:MENTIA_AI_SMOKE = "true"
+./mvnw test "-Dtest=AiProviderSmokeTest"
+```
 
 ## Cómo levantar
 

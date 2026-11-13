@@ -63,14 +63,16 @@ public class AnthropicAiClient implements AiClient {
 
     private Map<String, Object> buildPayload(AiRequest request) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("model", properties.model());
+        payload.put("model", properties.anthropic().model());
         payload.put("max_tokens", request.maxTokens());
         if (request.systemPrompt() != null && !request.systemPrompt().isBlank()) {
             payload.put("system", request.systemPrompt());
         }
         payload.put("messages", List.of(Map.of("role", "user", "content", request.userPrompt())));
         // Los modelos nuevos piensan por defecto y esos tokens se cobran como salida: effort bajo para contenido corto.
-        payload.put("output_config", Map.of("effort", properties.effort()));
+        if (properties.anthropic().hasEffort()) {
+            payload.put("output_config", Map.of("effort", properties.anthropic().effort()));
+        }
         return payload;
     }
 
@@ -79,7 +81,7 @@ public class AnthropicAiClient implements AiClient {
             JsonNode body = restClient.post()
                     .uri("/v1/messages")
                     .header("x-api-key", properties.apiKey())
-                    .header("anthropic-version", properties.apiVersion())
+                    .header("anthropic-version", properties.anthropic().apiVersion())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(payload)
                     .retrieve()

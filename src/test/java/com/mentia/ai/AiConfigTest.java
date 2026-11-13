@@ -23,7 +23,7 @@ class AiConfigTest {
             .withBean(AiUsageRepository.class, () -> mock(AiUsageRepository.class))
             .withBean(Clock.class, Clock::systemUTC)
             // Aislado de lo que haya en el entorno de quien corre el test.
-            .withPropertyValues("mentia.ai.api-key=");
+            .withPropertyValues("mentia.ai.api-key=", "mentia.ai.enabled=false", "mentia.ai.provider=openai");
 
     @Test
     void elYmlRealBindeaConLosValoresIniciales() {
@@ -31,9 +31,13 @@ class AiConfigTest {
             assertThat(context).hasNotFailed();
             AiProperties p = context.getBean(AiProperties.class);
             assertThat(p.enabled()).isFalse();
-            assertThat(p.model()).isEqualTo("claude-haiku-5-5");
-            assertThat(p.pricing().inputUsdPerMillion()).isEqualByComparingTo(new BigDecimal("0.10"));
-            assertThat(p.pricing().outputUsdPerMillion()).isEqualByComparingTo(new BigDecimal("0.50"));
+            assertThat(p.provider()).isEqualTo("openai");
+            assertThat(p.model()).isEqualTo("gpt-4o-mini");
+            assertThat(p.pricing().inputUsdPerMillion()).isEqualByComparingTo(new BigDecimal("0.15"));
+            assertThat(p.pricing().outputUsdPerMillion()).isEqualByComparingTo(new BigDecimal("0.60"));
+            assertThat(p.openai().hasEffort()).as("gpt-4o-mini no razona: no se manda effort").isFalse();
+            assertThat(p.anthropic().model()).isEqualTo("claude-haiku-5-5");
+            assertThat(p.anthropic().pricing().inputUsdPerMillion()).isEqualByComparingTo(new BigDecimal("0.10"));
             assertThat(p.limits().globalDailyMicroUsd()).isEqualTo(2_000_000L);
             assertThat(p.limits().globalMonthlyMicroUsd()).isEqualTo(20_000_000L);
             assertThat(p.limits().userMonthlyMicroUsd()).isEqualTo(100_000L);
@@ -57,8 +61,14 @@ class AiConfigTest {
     }
 
     @Test
-    void habilitadaYConKeyUsaAnthropic() {
+    void habilitadaYConKeyUsaOpenAiPorDefecto() {
         runner.withPropertyValues("mentia.ai.enabled=true", "mentia.ai.api-key=sk-test")
+                .run(context -> assertThat(context.getBean(AiClient.class)).isInstanceOf(OpenAiClient.class));
+    }
+
+    @Test
+    void conProveedorAnthropicUsaAnthropic() {
+        runner.withPropertyValues("mentia.ai.enabled=true", "mentia.ai.api-key=sk-test", "mentia.ai.provider=Anthropic")
                 .run(context -> assertThat(context.getBean(AiClient.class)).isInstanceOf(AnthropicAiClient.class));
     }
 

@@ -255,7 +255,7 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 **Alcance.** Deja lista la capa para llamar a un modelo de lenguaje de forma segura y barata. Sirve a dos usos futuros, ambos **fuera del motor**: (a) generación de contenido por lotes (por ejemplo listas de palabras), antes de que el usuario lo necesite, validada y guardada como filas; (b) feedback en lenguaje natural sobre el progreso. La IA nunca decide dificultad, nivel ni qué ejercicios se asignan (regla 3 de `CLAUDE.md`), y no se llama en medio de una sesión. En esta etapa ningún flujo de usuario la usa. No agrega endpoints, por lo que `openapi.yaml` no cambia.
 
 **Piezas** (paquete `com.mentia.ai`):
-- `AiClient` (puerto) con `AnthropicAiClient` (RestClient, timeout corto, reintentos con backoff solo ante fallas transitorias) y `DisabledAiClient` (cuando `mentia.ai.enabled=false` o falta `ANTHROPIC_API_KEY`).
+- `AiClient` (puerto) con `OpenAiClient` (Chat Completions) y `AnthropicAiClient` (Messages), ambos con RestClient, timeout corto y reintentos con backoff solo ante fallas transitorias; y `DisabledAiClient` (cuando `mentia.ai.enabled=false` o falta `MENTIA_AI_API_KEY`). El proveedor se elige con `mentia.ai.provider`.
 - `AiBudgetGuard`: verifica los límites antes de cada llamada y registra el uso real después. Los límites son blandos (se compara el gasto ya registrado); la barrera dura es el tope de gasto mensual en la consola del proveedor, que se configura aparte.
 - `GuardedAiService`: único punto de entrada (límites → circuit breaker → proveedor → registro). Toda falla sale como `AiUnavailableException` con un motivo (`DISABLED`, `LIMIT_EXCEEDED`, `CIRCUIT_OPEN`, `PROVIDER_ERROR`); el consumidor debe tener fallback.
 - Circuit breaker con Resilience4j (`resilience4j-circuitbreaker`, solo el núcleo): se abre tras N fallas transitorias seguidas. Las no transitorias (key inválida, pedido rechazado) no cuentan.
@@ -269,12 +269,14 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 
 | Propiedad | Valor inicial | Uso |
 |---|---|---|
-| `enabled` | `false` | Interruptor general. Para activar: `MENTIA_AI_ENABLED=true` y `ANTHROPIC_API_KEY` en el entorno |
-| `provider` / `model` | `anthropic` / `claude-haiku-5-5` | Proveedor y modelo |
-| `effort` | `low` | Los modelos nuevos piensan por defecto y esos tokens se cobran como salida |
+| `enabled` | `false` | Interruptor general. Para activar: `MENTIA_AI_ENABLED=true` y `MENTIA_AI_API_KEY` en el entorno |
+| `provider` | `openai` | `openai` o `anthropic` (`MENTIA_AI_PROVIDER`); la key tiene que ser de ese proveedor |
+| `openai.model` / `anthropic.model` | `gpt-4o-mini` / `claude-haiku-5-5` | Modelo de cada proveedor |
+| `openai.effort` / `anthropic.effort` | vacío / `low` | Razonamiento. `gpt-4o-mini` no razona y rechaza el parámetro; Haiku piensa por defecto y esos tokens se cobran como salida |
 | `connect-timeout` / `read-timeout` | `3s` / `20s` | Timeouts |
 | `max-retries` / `retry-backoff` | `2` / `500ms` | Reintentos con backoff exponencial |
-| `pricing.input-usd-per-million` / `output-usd-per-million` | `0.10` / `0.50` | Precio de Haiku 5.5 hasta 100.000 tokens de prompt (arriba de eso sube) |
+| `openai.pricing` (entrada / salida, USD por millón) | `0.15` / `0.60` | Tarifa estándar de `gpt-4o-mini` (nov 2026) |
+| `anthropic.pricing` (entrada / salida, USD por millón) | `0.10` / `0.50` | Precio de Haiku 5.5 hasta 100.000 tokens de prompt (arriba de eso sube) |
 | `limits.global-daily-usd` / `global-monthly-usd` | `2.00` / `20.00` | Presupuesto global |
 | `limits.user-monthly-usd` / `user-daily-calls` | `0.10` / `5` | Por usuario; solo usos disparados por una persona |
 | `limits.max-tokens-per-call` / `max-prompt-chars` | `1024` / `8000` | Tamaño por llamada |

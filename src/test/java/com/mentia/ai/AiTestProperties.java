@@ -15,9 +15,18 @@ final class AiTestProperties {
     }
 
     static AiProperties with(AiProperties.Limits limits, int maxRetries) {
-        return new AiProperties(true, "anthropic", "test-key-123", "claude-haiku-5-5", "https://api.anthropic.test",
-                "2023-06-01", "low", Duration.ofSeconds(1), Duration.ofSeconds(1), maxRetries, Duration.ofMillis(10),
-                new AiProperties.Pricing(new BigDecimal("0.10"), new BigDecimal("0.50")), limits,
+        return with(AiProperties.ANTHROPIC, limits, maxRetries);
+    }
+
+    static AiProperties with(String provider, AiProperties.Limits limits, int maxRetries) {
+        AiProperties.ProviderSettings openai = new AiProperties.ProviderSettings("gpt-4o-mini",
+                "https://api.openai.test", null, "",
+                new AiProperties.Pricing(new BigDecimal("0.15"), new BigDecimal("0.60")));
+        AiProperties.ProviderSettings anthropic = new AiProperties.ProviderSettings("claude-haiku-5-5",
+                "https://api.anthropic.test", "2023-06-01", "low",
+                new AiProperties.Pricing(new BigDecimal("0.10"), new BigDecimal("0.50")));
+        return new AiProperties(true, provider, "test-key-123", openai, anthropic, Duration.ofSeconds(1),
+                Duration.ofSeconds(1), maxRetries, Duration.ofMillis(10), limits,
                 new AiProperties.CircuitBreaker(3, Duration.ofSeconds(30), 1));
     }
 

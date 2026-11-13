@@ -11,13 +11,14 @@ import org.springframework.test.context.TestPropertySource;
 import com.mentia.support.IntegrationTest;
 
 /**
- * Una llamada real a Anthropic con la key de {@code ANTHROPIC_API_KEY}. Cuesta centavos, así que solo corre si además
- * se define {@code MENTIA_AI_SMOKE=true}; en el CI y en un {@code verify} normal queda salteado.
- * Uso: {@code ./mvnw test -Dtest=AnthropicSmokeTest} con las dos variables en la terminal.
+ * Una llamada real al proveedor de {@code MENTIA_AI_PROVIDER} (OpenAI por defecto) con la key de
+ * {@code MENTIA_AI_API_KEY}. Cuesta una fracción de centavo, así que solo corre si además se define
+ * {@code MENTIA_AI_SMOKE=true}; en el CI y en un {@code verify} normal queda salteado.
+ * Uso: {@code ./mvnw test -Dtest=AiProviderSmokeTest} con las variables en la terminal.
  */
 @EnabledIfEnvironmentVariable(named = "MENTIA_AI_SMOKE", matches = "true")
 @TestPropertySource(properties = "mentia.ai.enabled=true")
-class AnthropicSmokeTest extends IntegrationTest {
+class AiProviderSmokeTest extends IntegrationTest {
 
     @Autowired
     AiClient aiClient;
@@ -30,8 +31,8 @@ class AnthropicSmokeTest extends IntegrationTest {
 
     @Test
     void laKeyFuncionaYElUsoQuedaRegistrado() {
-        assertThat(aiClient).as("ANTHROPIC_API_KEY tiene que estar definida en esta terminal")
-                .isInstanceOf(AnthropicAiClient.class);
+        assertThat(aiClient).as("MENTIA_AI_API_KEY tiene que estar definida en esta terminal")
+                .isNotInstanceOf(DisabledAiClient.class);
         Long before = jdbc.queryForObject("SELECT count(*) FROM ai_usage WHERE result = 'OK'", Long.class);
 
         AiResponse response = guardedAiService.generate(AiPurpose.CONTENT_GENERATION,
