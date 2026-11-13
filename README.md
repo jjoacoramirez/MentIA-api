@@ -18,6 +18,9 @@ Copiar `.env.example` a `.env` y completar. `docker compose` lee `.env` solo; pa
 | `MENTIA_DB_NAME` | Nombre de la base (docker compose) | `mentia` |
 | `MENTIA_DB_URL` | URL JDBC | `jdbc:postgresql://localhost:5432/mentia` |
 | `MENTIA_JWT_SECRET` | Secreto HS256 del JWT (mínimo 32 caracteres) | obligatoria |
+| `ANTHROPIC_API_KEY` | Key de la API de Anthropic (IA). Solo la lee el backend | opcional (vacía = IA deshabilitada) |
+
+`ANTHROPIC_API_KEY` tiene que estar en el entorno de la terminal (o en la run configuration del IDE) desde donde corrés `./mvnw spring-boot:run`: docker compose solo levanta la base y `./mvnw` no lee `.env`. Además de la key hay que activar la IA con `MENTIA_AI_ENABLED=true` (por defecto está apagada y la API funciona igual). Nunca se commitea; usá keys distintas para dev y prod.
 
 ## Cómo levantar
 

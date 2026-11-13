@@ -20,6 +20,7 @@
         <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <swagger-request-validator.version>2.44.1</swagger-request-validator.version>
+        <resilience4j.version>2.3.0</resilience4j.version>
     </properties>
 
     <dependencies>
@@ -55,6 +56,13 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>${jjwt.version}</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- Circuit breaker de la capa de IA (solo el núcleo, sin starter de Spring: no arrastra actuator ni AOP). -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+            <version>${resilience4j.version}</version>
         </dependency>
 
         <dependency>

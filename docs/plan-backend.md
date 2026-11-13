@@ -251,6 +251,41 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 ### BACK-15, 16, 17 Post-MVP
 - No implementar. Solo se mantiene el paquete `episodic/` vacío.
 
+### IA-01 Infraestructura de IA con límites de costo
+**Alcance.** Deja lista la capa para llamar a un modelo de lenguaje de forma segura y barata. Sirve a dos usos futuros, ambos **fuera del motor**: (a) generación de contenido por lotes (por ejemplo listas de palabras), antes de que el usuario lo necesite, validada y guardada como filas; (b) feedback en lenguaje natural sobre el progreso. La IA nunca decide dificultad, nivel ni qué ejercicios se asignan (regla 3 de `CLAUDE.md`), y no se llama en medio de una sesión. En esta etapa ningún flujo de usuario la usa. No agrega endpoints, por lo que `openapi.yaml` no cambia.
+
+**Piezas** (paquete `com.mentia.ai`):
+- `AiClient` (puerto) con `AnthropicAiClient` (RestClient, timeout corto, reintentos con backoff solo ante fallas transitorias) y `DisabledAiClient` (cuando `mentia.ai.enabled=false` o falta `ANTHROPIC_API_KEY`).
+- `AiBudgetGuard`: verifica los límites antes de cada llamada y registra el uso real después. Los límites son blandos (se compara el gasto ya registrado); la barrera dura es el tope de gasto mensual en la consola del proveedor, que se configura aparte.
+- `GuardedAiService`: único punto de entrada (límites → circuit breaker → proveedor → registro). Toda falla sale como `AiUnavailableException` con un motivo (`DISABLED`, `LIMIT_EXCEEDED`, `CIRCUIT_OPEN`, `PROVIDER_ERROR`); el consumidor debe tener fallback.
+- Circuit breaker con Resilience4j (`resilience4j-circuitbreaker`, solo el núcleo): se abre tras N fallas transitorias seguidas. Las no transitorias (key inválida, pedido rechazado) no cuentan.
+
+**Datos** (migración `V13__ai_usage.sql`):
+- `ai_usage`: un registro por intento (día UTC, propósito, modelo, tokens, costo en micro-USD, resultado `OK`/`ERROR`/`BLOCKED`). Sin `user_id` ni contenido de prompts.
+- `ai_user_quota`: contadores por usuario y día (llamadas, costo) solo para los usos disparados por una persona. `ON DELETE CASCADE`; sin contenido.
+- Los costos son enteros en micro-USD (1 USD = 1.000.000). Se calculan con los tokens reales que devuelve la API y se redondean hacia arriba.
+
+**Configuración** (`mentia.ai.*` en `application.yml`; nada hardcodeado):
+
+| Propiedad | Valor inicial | Uso |
+|---|---|---|
+| `enabled` | `false` | Interruptor general. Para activar: `MENTIA_AI_ENABLED=true` y `ANTHROPIC_API_KEY` en el entorno |
+| `provider` / `model` | `anthropic` / `claude-haiku-5-5` | Proveedor y modelo |
+| `effort` | `low` | Los modelos nuevos piensan por defecto y esos tokens se cobran como salida |
+| `connect-timeout` / `read-timeout` | `3s` / `20s` | Timeouts |
+| `max-retries` / `retry-backoff` | `2` / `500ms` | Reintentos con backoff exponencial |
+| `pricing.input-usd-per-million` / `output-usd-per-million` | `0.10` / `0.50` | Precio de Haiku 5.5 hasta 100.000 tokens de prompt (arriba de eso sube) |
+| `limits.global-daily-usd` / `global-monthly-usd` | `2.00` / `20.00` | Presupuesto global |
+| `limits.user-monthly-usd` / `user-daily-calls` | `0.10` / `5` | Por usuario; solo usos disparados por una persona |
+| `limits.max-tokens-per-call` / `max-prompt-chars` | `1024` / `8000` | Tamaño por llamada |
+| `circuit-breaker.failure-threshold` / `open-duration` / `half-open-calls` | `5` / `60s` / `1` | Corte tras fallas seguidas |
+
+Un límite en `0` actúa como interruptor: bloquea todo uso de ese tipo.
+
+**Privacidad.** Al proveedor solo se le mandan parámetros del ejercicio (categoría, nivel, cantidad), nunca IDs, emails ni datos de usuario. No se loguean la key ni prompts completos: `AiProperties`, `AiRequest` y `AiResponse` redactan su `toString`, y los mensajes de error llevan solo el código HTTP. La generación por lotes es costo global y no cuenta contra la cuota de ningún usuario.
+
+**Fuera de alcance de esta etapa:** el ejercicio que usa palabras, el generador por lotes con su validación y biblioteca de respaldo, el feedback en lenguaje natural y un endpoint de administración para disparar lotes.
+
 ## 7. Reglas del motor (propuesta inicial, validar antes de BACK-10)
 
 Configuración en `application.yml`:
