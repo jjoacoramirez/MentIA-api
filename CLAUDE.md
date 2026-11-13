@@ -35,6 +35,7 @@ com.mentia
 ├── progress/      # historial y progreso                    (BACK-14)
 ├── gamification/  # XP, niveles, logros                     (BACK-18, 19)
 ├── metrics/       # eventos y vistas de métricas del MVP    (BACK-21)
+├── ai/            # cliente de IA, límites de costo, circuit breaker (IA-01)
 └── episodic/      # Post-MVP, no implementar todavía        (BACK-15, 16, 17)
 ```
 
@@ -44,10 +45,10 @@ Cada módulo tiene `XController`, `XService`, `XRepository`, `domain/` (entidade
 
 1. **Seudonimización.** Solo se guardan: username, hash de contraseña, UUID interno aleatorio, rango etario y datos de configuración del entrenamiento. Nunca se pide ni se guarda nombre real, apellido, DNI, teléfono, email, dirección, ubicación, fecha exacta de nacimiento ni información médica. Jackson debe rechazar propiedades desconocidas (`spring.jackson.deserialization.fail-on-unknown-properties=true`).
 2. **Nada clínico.** Los scores representan desempeño dentro de MentIA, no mediciones de capacidades cognitivas. Está prohibido en código, nombres de campos, mensajes y seeds usar términos como "diagnóstico", "capacidad de memoria", "mejora cognitiva" o "déficit". Nombres como `performance_score` y `training_level` están bien.
-3. **Adaptación determinística.** El motor usa reglas, no modelos de IA. Todos los umbrales y pesos viven en `application.yml` bajo `mentia.engine.*`, nunca hardcodeados, y están documentados en `docs/plan-backend.md`.
+3. **Adaptación determinística.** El motor usa reglas, no modelos de IA. Todos los umbrales y pesos viven en `application.yml` bajo `mentia.engine.*`, nunca hardcodeados, y están documentados en `docs/plan-backend.md`. **Excepción acotada (IA-01):** el paquete `ai/` puede llamar a un modelo externo solo para generar contenido por lotes y para feedback en lenguaje natural. La IA nunca decide dificultad, nivel ni qué ejercicios se asignan, no se llama en medio de una sesión de entrenamiento y todo uso tiene fallback. Sus límites viven en `mentia.ai.*`.
 4. **Extensible por datos.** Agregar categorías, ejercicios, niveles o variantes se hace con filas (migración o seed), sin cambiar la arquitectura.
 5. **Comparar al usuario solo consigo mismo.** No hay rankings ni comparaciones entre usuarios.
-6. **Secretos.** Contraseñas y códigos de recuperación se guardan siempre hasheados con BCrypt. Nunca van a logs ni a respuestas, salvo el código de recuperación, que se muestra una sola vez. El secreto del JWT viene de la variable de entorno `MENTIA_JWT_SECRET`.
+6. **Secretos.** Contraseñas y códigos de recuperación se guardan siempre hasheados con BCrypt. Nunca van a logs ni a respuestas, salvo el código de recuperación, que se muestra una sola vez. El secreto del JWT viene de la variable de entorno `MENTIA_JWT_SECRET` y la key del proveedor de IA de `MENTIA_AI_API_KEY`; ninguna se commitea, se loguea ni se incluye en un `toString`. Al proveedor de IA solo se le mandan parámetros del ejercicio, nunca IDs ni datos de usuario, y no se loguean prompts completos.
 
 ## Convenciones
 

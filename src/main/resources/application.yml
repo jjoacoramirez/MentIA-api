@@ -49,6 +49,49 @@ mentia:
     accuracy-bonus-threshold: 0.8
     # Pasar del nivel n al n+1 requiere xp-per-level-factor × n XP.
     xp-per-level-factor: 100
+  # Capa de IA (IA-01). Fuera del motor: la IA nunca decide dificultad ni selecciona ejercicios.
+  # Para activarla: MENTIA_AI_ENABLED=true y MENTIA_AI_API_KEY en el entorno (la key nunca va acá).
+  # El proveedor se elige con MENTIA_AI_PROVIDER (openai o anthropic); la key tiene que ser de ese proveedor.
+  ai:
+    enabled: ${MENTIA_AI_ENABLED:false}
+    provider: ${MENTIA_AI_PROVIDER:openai}
+    api-key: ${MENTIA_AI_API_KEY:}
+    openai:
+      # Sin razonamiento: no gasta tokens ocultos y no necesita effort.
+      model: gpt-4o-mini
+      base-url: https://api.openai.com
+      effort: ""
+      # USD por millón de tokens de gpt-4o-mini (tarifa estándar, developers.openai.com/api/docs/pricing, nov 2026).
+      pricing:
+        input-usd-per-million: 0.15
+        output-usd-per-million: 0.60
+    anthropic:
+      model: claude-haiku-5-5
+      base-url: https://api.anthropic.com
+      api-version: "2023-06-01"
+      # Los modelos nuevos piensan por defecto y esos tokens se cobran como salida; "low" para contenido corto.
+      effort: low
+      # USD por millón de tokens de Haiku 5.5 (verificado en la doc oficial: vale hasta 100.000 tokens de prompt;
+      # arriba de eso el precio sube). max-prompt-chars mantiene los prompts muy por debajo de ese umbral.
+      pricing:
+        input-usd-per-million: 0.10
+        output-usd-per-million: 0.50
+    connect-timeout: 3s
+    read-timeout: 20s
+    max-retries: 2
+    retry-backoff: 500ms           # se duplica en cada reintento
+    limits:
+      global-daily-usd: 2.00
+      global-monthly-usd: 20.00
+      # Solo para usos disparados por una persona (feedback). La generación por lotes es costo global.
+      user-monthly-usd: 0.10
+      user-daily-calls: 5
+      max-tokens-per-call: 1024
+      max-prompt-chars: 8000
+    circuit-breaker:
+      failure-threshold: 5          # fallas transitorias seguidas para abrirlo
+      open-duration: 60s
+      half-open-calls: 1
   session:
     # Una sesión GENERATED o IN_PROGRESS más vieja que esto se abandona al pedir una nueva.
     stale-after: 12h
