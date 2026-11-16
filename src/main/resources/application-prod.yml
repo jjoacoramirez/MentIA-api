@@ -1,0 +1,10 @@
+# Perfil de producción (lo activa el Dockerfile). Base, secretos e IA vienen de variables de entorno.
+server:
+  # Detrás del proxy de Railway: respeta X-Forwarded-* (esquema https y host público).
+  forward-headers-strategy: framework
+  error:
+    include-stacktrace: never
+
+logging:
+  level:
+    com.mentia: INFO
