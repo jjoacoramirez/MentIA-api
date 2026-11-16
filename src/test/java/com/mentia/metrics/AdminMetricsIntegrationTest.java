@@ -68,7 +68,7 @@ class AdminMetricsIntegrationTest extends IntegrationTest {
         jdbc.update("""
                 INSERT INTO session_items(id, session_id, position, exercise_id, variant_id, category_id, difficulty_level, seed, params,
                     estimated_seconds)
-                VALUES (?, ?, 1, ?, ?, ?, ?, 0, '{}'::jsonb, 60)
+                VALUES (?, ?, 1, ?, ?, ?, ?, 0, '{}'::jsonb, 30)
                 """, item, session, exercise, variant, category, level);
         jdbc.update("""
                 INSERT INTO attempts(id, client_attempt_id, session_item_id, session_id, user_id, exercise_id, variant_id,
