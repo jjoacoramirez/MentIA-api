@@ -47,6 +47,10 @@ la integración con la base, así que antes de mergear hay que correrlo en una m
 
 Los tests que validan contra el contrato usan `Contract.matchesContract()`, que chequea request y response contra `openapi.yaml`.
 
+## Publicar
+
+La API se publica en Railway con el `Dockerfile` del repo (perfil `prod`, puerto de `PORT`) y la UI en Vercel. Pasos, variables y cómo crear la primera cuenta admin: [docs/despliegue.md](docs/despliegue.md).
+
 ## Usuarios admin (debug)
 
 Todo usuario se registra con rol `USER`. El rol `ADMIN` habilita herramientas de debug, como `POST /api/v1/assessment/skip` (saltear la evaluación inicial). Se asigna a mano en la base:
