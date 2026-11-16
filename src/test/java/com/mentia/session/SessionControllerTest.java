@@ -50,7 +50,7 @@ class SessionControllerTest extends WebLayerTest {
 
     @Test
     void generarDevuelve201ConElContratoYUsaLaDuracionPedida() throws Exception {
-        given(generationService.create(USER, 15)).willReturn(new SessionGenerationService.Generated(session(), true));
+        given(generationService.create(USER, 15, null)).willReturn(new SessionGenerationService.Generated(session(), true));
 
         mockMvc.perform(post("/api/v1/sessions").with(authenticatedAs(USER))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"durationMinutes\": 15}"))
@@ -61,7 +61,7 @@ class SessionControllerTest extends WebLayerTest {
 
     @Test
     void sinBodyUsaLaDuracionDelPerfilYRetomarDevuelve200() throws Exception {
-        given(generationService.create(USER, null)).willReturn(new SessionGenerationService.Generated(session(), false));
+        given(generationService.create(USER, null, null)).willReturn(new SessionGenerationService.Generated(session(), false));
 
         mockMvc.perform(post("/api/v1/sessions").with(authenticatedAs(USER)))
                 .andExpect(status().isOk())
@@ -78,7 +78,7 @@ class SessionControllerTest extends WebLayerTest {
 
     @Test
     void sinEvaluacionDevuelve409AssessmentRequired() throws Exception {
-        given(generationService.create(USER, null)).willThrow(new ApiException(HttpStatus.CONFLICT,
+        given(generationService.create(USER, null, null)).willThrow(new ApiException(HttpStatus.CONFLICT,
                 ErrorCode.ASSESSMENT_REQUIRED, "Antes de entrenar necesitás completar la evaluación inicial."));
 
         mockMvc.perform(post("/api/v1/sessions").with(authenticatedAs(USER)))
@@ -173,7 +173,7 @@ class SessionControllerTest extends WebLayerTest {
     void cerrarDevuelveElResultadoConElContrato() throws Exception {
         given(lifecycleService.complete(USER, SESSION)).willReturn(new SessionResultResponse(SESSION,
                 SessionType.INITIAL_ASSESSMENT, SessionStatus.COMPLETED, 6, 6, 5, 1, 0.83, 9000L,
-                List.of(new CategoryResult("ATENCION", 2, 0.9, 1100, 3, 5)),
+                List.of(new CategoryResult("ATENCION", 2, 0.9, 1100, 3, 5, 75, 50)),
                 List.of(Adaptation.between("ATENCION", 3, 5)), null, null));
 
         mockMvc.perform(post("/api/v1/sessions/{id}/complete", SESSION).with(authenticatedAs(USER)))

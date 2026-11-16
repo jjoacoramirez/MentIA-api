@@ -1,15 +1,22 @@
 package com.mentia.engine;
 
+import java.util.List;
+
 /**
  * Ajuste de nivel por categoría al cerrar una sesión (docs/plan-backend.md, sección 7). Reglas determinísticas,
- * sin IA; todos los umbrales vienen de configuración:
+ * sin IA; todos los umbrales vienen de configuración.
+ * <p>
+ * Dentro de cada nivel hay un progreso de 0 (piso) a {@link AdaptationProperties#MAX} (techo). Cada actividad
+ * de la categoría suma o resta puntos:
  * <ol>
- *   <li>Menos de {@code min-items-for-adaptation} intentos de la categoría: se mantiene.</li>
- *   <li>Precisión {@code >= accuracy-up} y tiempo dentro de la tolerancia (o sin tiempo objetivo): sube 1.</li>
- *   <li>Precisión {@code < accuracy-down}: baja 1 y la categoría queda reforzada.</li>
- *   <li>En cualquier otro caso: se mantiene.</li>
+ *   <li>Precisión {@code >= accuracy-up} y tiempo dentro de la tolerancia (o sin tiempo objetivo): {@code points-up}.</li>
+ *   <li>Precisión {@code >= accuracy-up} pero más lenta: {@code points-up-slow}.</li>
+ *   <li>Precisión {@code < accuracy-down}: resta {@code points-down}.</li>
+ *   <li>En cualquier otro caso: no cambia.</li>
  * </ol>
- * El nivel siempre queda dentro de {@code [level-min, level-max]}.
+ * Si el progreso llega al techo sube un nivel; si llega a 0, baja uno. Al cambiar de nivel el progreso vuelve a
+ * {@code start}, así que una sesión mueve como mucho un nivel. En el nivel máximo (o mínimo) el progreso queda
+ * en el techo (o en el piso).
  */
 public class DifficultyEngine {
 
@@ -21,56 +28,49 @@ public class DifficultyEngine {
         this.engine = engine;
     }
 
-    public Decision nextLevel(int currentLevel, CategoryStats stats) {
+    public Decision next(int currentLevel, int currentProgress, List<Activity> activities) {
         int level = engine.clamp(currentLevel);
-        if (stats.items() < adaptation.minItemsForAdaptation()) {
-            return keep(level, Reason.FEW_ITEMS, false);
+        int points = activities.stream().mapToInt(this::points).sum();
+        int progress = Math.max(0, Math.min(AdaptationProperties.MAX, currentProgress)) + points;
+        int start = adaptation.levelProgress().start();
+
+        if (progress >= AdaptationProperties.MAX) {
+            return level < engine.levelMax()
+                    ? new Decision(level + 1, start, points, Adjustment.UP)
+                    : new Decision(level, AdaptationProperties.MAX, points, Adjustment.KEEP);
         }
-        if (stats.accuracy() >= adaptation.accuracyUp()) {
-            if (stats.timeRatio() != null && stats.timeRatio() > adaptation.responseTimeTolerance()) {
-                return keep(level, Reason.SLOW_RESPONSE, false);
-            }
-            return level >= engine.levelMax()
-                    ? keep(level, Reason.AT_MAX, false)
-                    : new Decision(level + 1, Adjustment.UP, Reason.HIGH_PERFORMANCE, false);
+        if (progress <= 0) {
+            return level > engine.levelMin()
+                    ? new Decision(level - 1, start, points, Adjustment.DOWN)
+                    : new Decision(level, 0, points, Adjustment.KEEP);
         }
-        if (stats.accuracy() < adaptation.accuracyDown()) {
-            return level <= engine.levelMin()
-                    ? keep(level, Reason.AT_MIN, true)
-                    : new Decision(level - 1, Adjustment.DOWN, Reason.LOW_PERFORMANCE, true);
-        }
-        return keep(level, Reason.STEADY, false);
+        return new Decision(level, progress, points, Adjustment.KEEP);
     }
 
-    private static Decision keep(int level, Reason reason, boolean reinforce) {
-        return new Decision(level, Adjustment.KEEP, reason, reinforce);
+    /** Puntos que suma (o resta) una actividad. */
+    public int points(Activity activity) {
+        AdaptationProperties.LevelProgress values = adaptation.levelProgress();
+        if (activity.accuracy() >= adaptation.accuracyUp()) {
+            boolean slow = activity.timeRatio() != null && activity.timeRatio() > adaptation.responseTimeTolerance();
+            return slow ? values.pointsUpSlow() : values.pointsUp();
+        }
+        return activity.accuracy() < adaptation.accuracyDown() ? -values.pointsDown() : 0;
     }
 
     /**
-     * @param items     intentos de la categoría en la sesión
-     * @param accuracy  precisión promedio (0 a 1)
-     * @param timeRatio tiempo de respuesta promedio sobre el tiempo objetivo, o null si ningún ejercicio lo define
+     * @param accuracy  precisión de la actividad (0 a 1)
+     * @param timeRatio tiempo de respuesta sobre el tiempo objetivo, o null si el ejercicio no lo define
      */
-    public record CategoryStats(int items, double accuracy, Double timeRatio) {
+    public record Activity(double accuracy, Double timeRatio) {
     }
 
-    /** {@code reinforce}: la categoría tuvo precisión baja y conviene darle más lugar en las próximas sesiones. */
-    public record Decision(int level, Adjustment adjustment, Reason reason, boolean reinforce) {
+    /** Nivel y progreso con los que sigue la categoría, y los puntos que sumó la sesión. */
+    public record Decision(int level, int progress, int points, Adjustment adjustment) {
     }
 
     public enum Adjustment {
         UP,
         KEEP,
         DOWN
-    }
-
-    public enum Reason {
-        FEW_ITEMS,
-        HIGH_PERFORMANCE,
-        SLOW_RESPONSE,
-        LOW_PERFORMANCE,
-        STEADY,
-        AT_MAX,
-        AT_MIN
     }
 }

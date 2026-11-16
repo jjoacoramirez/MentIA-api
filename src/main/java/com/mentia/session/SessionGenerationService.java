@@ -20,6 +20,7 @@ import com.mentia.catalog.dto.ExerciseDefinition;
 import com.mentia.catalog.dto.LevelDefinition;
 import com.mentia.common.error.ApiException;
 import com.mentia.common.error.ErrorCode;
+import com.mentia.common.error.FieldValidationException;
 import com.mentia.engine.EngineProperties;
 import com.mentia.engine.RotationProperties;
 import com.mentia.engine.SessionPlanner;
@@ -36,7 +37,7 @@ import com.mentia.session.dto.SessionResponse;
 
 /**
  * Generación de sesiones de entrenamiento (BACK-09): llena el tiempo pedido con ejercicios de las categorías
- * del MVP, priorizando las de menor desempeño, al nivel actual del usuario en cada una y con rotación de
+ * del MVP (o de una sola, si se pide), priorizando las de menor desempeño, al nivel actual del usuario en cada una y con rotación de
  * ejercicios y variantes.
  */
 @Service
@@ -73,17 +74,27 @@ public class SessionGenerationService {
 
     /**
      * Requiere un punto de partida (evaluación completada, o salteada por un admin). Si hay una sesión de
-     * entrenamiento abierta y no vencida, la devuelve para retomarla.
+     * entrenamiento abierta y no vencida, la devuelve para retomarla, salvo que se pida una categoría y la
+     * abierta tenga ejercicios de otras: en ese caso se abandona y se genera una nueva.
+     *
+     * @param category código de una categoría activa del MVP, o null para todas
      */
     @Transactional
-    public Generated create(UUID userId, Integer durationMinutes) {
+    public Generated create(UUID userId, Integer durationMinutes, String category) {
+        if (category != null && catalogService.activeMvpCategories().stream()
+                .noneMatch(c -> c.code().equals(category))) {
+            throw new FieldValidationException("category", "Categoría desconocida: " + category);
+        }
         if (!performanceService.hasInitialLevels(userId)) {
             throw new ApiException(HttpStatus.CONFLICT, ErrorCode.ASSESSMENT_REQUIRED,
                     "Antes de entrenar necesitás completar la evaluación inicial.");
         }
         Optional<SessionResponse> open = sessionService.resumable(userId, SessionType.TRAINING);
         if (open.isPresent()) {
-            return new Generated(open.get(), false);
+            if (category == null || open.get().items().stream().allMatch(i -> i.category().equals(category))) {
+                return new Generated(open.get(), false);
+            }
+            sessionService.abandonOpen(userId, SessionType.TRAINING);
         }
 
         int minutes = durationMinutes != null ? durationMinutes : profileService.sessionMinutes(userId);
@@ -93,19 +104,22 @@ public class SessionGenerationService {
         Map<UUID, String> codeByCategory = new HashMap<>();
         List<CategoryOption> options = new ArrayList<>();
 
-        for (CategoryRef category : catalogService.activeMvpCategories()) {
-            PerformanceSnapshot snapshot = performance.get(category.id());
+        for (CategoryRef ref : catalogService.activeMvpCategories()) {
+            if (category != null && !category.equals(ref.code())) {
+                continue;
+            }
+            PerformanceSnapshot snapshot = performance.get(ref.id());
             int level = snapshot != null ? snapshot.level() : engine.initialLevel();
-            levelByCategory.put(category.id(), level);
-            codeByCategory.put(category.id(), category.code());
+            levelByCategory.put(ref.id(), level);
+            codeByCategory.put(ref.id(), ref.code());
             List<ExerciseOption> exercises = new ArrayList<>();
-            for (ExerciseDefinition exercise : catalogService.activeExercises(category.code())) {
+            for (ExerciseDefinition exercise : catalogService.activeExercises(ref.code())) {
                 LevelDefinition definition = catalogService.level(exercise.id(), level);
                 levelByExercise.put(exercise.id(), definition);
                 exercises.add(new ExerciseOption(exercise.id(), definition.estimatedSeconds()));
             }
             if (!exercises.isEmpty()) {
-                options.add(new CategoryOption(category.id(), snapshot != null ? snapshot.score() : 0.0, exercises));
+                options.add(new CategoryOption(ref.id(), snapshot != null ? snapshot.score() : 0.0, exercises));
             }
         }
         if (options.isEmpty()) {

@@ -24,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.mentia.catalog.CatalogService;
 import com.mentia.catalog.dto.CategoryRef;
+import com.mentia.engine.AdaptationProperties;
 import com.mentia.engine.EngineProperties;
 import com.mentia.performance.AssessmentProperties.Threshold;
 import com.mentia.performance.domain.PerformanceProfile;
@@ -39,6 +40,8 @@ class PerformanceServiceTest {
     private static final UUID ATTENTION = UUID.randomUUID();
     private static final UUID VISUAL = UUID.randomUUID();
     private static final EngineProperties ENGINE = new EngineProperties(3, 1, 10, 0.3);
+    private static final AdaptationProperties ADAPTATION = new AdaptationProperties(0.85, 0.60, 1.25,
+            new AdaptationProperties.LevelProgress(50, 25, 10, 25));
 
     @Mock
     PerformanceRepository repository;
@@ -52,36 +55,37 @@ class PerformanceServiceTest {
     void setUp() {
         InitialLevelPolicy policy = new InitialLevelPolicy(
                 new AssessmentProperties(2, List.of(new Threshold(0.0, 1))), ENGINE);
-        service = new PerformanceService(repository, policy, catalogService, ENGINE, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new PerformanceService(repository, policy, catalogService, ENGINE, ADAPTATION, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
-    void elScoreSeActualizaConMediaMovilYElNivelEsElDecidido() {
-        PerformanceProfile profile = new PerformanceProfile(USER, ATTENTION, 60.0, 3, 6, BEFORE);
+    void elScoreSeActualizaConMediaMovilYElNivelYElProgresoSonLosDecididos() {
+        PerformanceProfile profile = new PerformanceProfile(USER, ATTENTION, 60.0, 3, 50, 6, BEFORE);
         given(repository.findById(new PerformanceProfile.Key(USER, ATTENTION))).willReturn(Optional.of(profile));
 
-        service.recordSession(USER, Map.of(ATTENTION, new CategoryOutcome(List.of(1.0, 0.8), 4)));
+        service.recordSession(USER, Map.of(ATTENTION, new CategoryOutcome(List.of(1.0, 0.8), 4, 50)));
 
         // 60 × 0.7 + 90 × 0.3 = 69
         assertThat(profile.getScore()).isCloseTo(69.0, within(1e-9));
         assertThat(profile.getLevel()).isEqualTo(4);
+        assertThat(profile.getLevelProgress()).isEqualTo(50);
         assertThat(profile.getSamples()).isEqualTo(8);
         assertThat(profile.getUpdatedAt()).isEqualTo(NOW);
     }
 
     @Test
     void elNivelSeAcotaAlRangoConfigurado() {
-        PerformanceProfile profile = new PerformanceProfile(USER, ATTENTION, 90.0, 10, 6, BEFORE);
+        PerformanceProfile profile = new PerformanceProfile(USER, ATTENTION, 90.0, 10, 100, 6, BEFORE);
         given(repository.findById(new PerformanceProfile.Key(USER, ATTENTION))).willReturn(Optional.of(profile));
 
-        service.recordSession(USER, Map.of(ATTENTION, new CategoryOutcome(List.of(1.0), 11)));
+        service.recordSession(USER, Map.of(ATTENTION, new CategoryOutcome(List.of(1.0), 11, 100)));
 
         assertThat(profile.getLevel()).isEqualTo(10);
     }
 
     @Test
     void unaCategoriaSinIntentosNoCambia() {
-        service.recordSession(USER, Map.of(ATTENTION, new CategoryOutcome(List.of(), 4)));
+        service.recordSession(USER, Map.of(ATTENTION, new CategoryOutcome(List.of(), 4, 50)));
 
         verify(repository, never()).findById(any());
         verify(repository, never()).save(any());
@@ -91,20 +95,21 @@ class PerformanceServiceTest {
     void unaCategoriaSinPerfilArrancaConElScoreDeLaSesion() {
         given(repository.findById(new PerformanceProfile.Key(USER, VISUAL))).willReturn(Optional.empty());
 
-        service.recordSession(USER, Map.of(VISUAL, new CategoryOutcome(List.of(0.5), 3)));
+        service.recordSession(USER, Map.of(VISUAL, new CategoryOutcome(List.of(0.5), 3, 25)));
 
         ArgumentCaptor<PerformanceProfile> saved = ArgumentCaptor.forClass(PerformanceProfile.class);
         verify(repository).save(saved.capture());
         assertThat(saved.getValue().getScore()).isEqualTo(50.0);
         assertThat(saved.getValue().getLevel()).isEqualTo(3);
+        assertThat(saved.getValue().getLevelProgress()).isEqualTo(25);
         assertThat(saved.getValue().getSamples()).isEqualTo(1);
     }
 
     @Test
     void elPerfilSeDevuelveEnElOrdenDeLasCategoriasYRedondeado() {
         given(repository.findByIdUserId(USER)).willReturn(List.of(
-                new PerformanceProfile(USER, VISUAL, 72.3456, 4, 2, BEFORE),
-                new PerformanceProfile(USER, ATTENTION, 55.0, 3, 2, BEFORE)));
+                new PerformanceProfile(USER, VISUAL, 72.3456, 4, 80, 2, BEFORE),
+                new PerformanceProfile(USER, ATTENTION, 55.0, 3, 20, 2, BEFORE)));
         given(catalogService.activeCategoryRefs()).willReturn(List.of(
                 new CategoryRef(ATTENTION, "ATENCION"), new CategoryRef(VISUAL, "MEMORIA_VISUAL"),
                 new CategoryRef(UUID.randomUUID(), "MEMORIA_TRABAJO")));
@@ -112,7 +117,7 @@ class PerformanceServiceTest {
         PerformanceProfileResponse response = service.profile(USER);
 
         assertThat(response.categories()).containsExactly(
-                new PerformanceProfileResponse.Entry("ATENCION", 55.0, 3, BEFORE),
-                new PerformanceProfileResponse.Entry("MEMORIA_VISUAL", 72.3, 4, BEFORE));
+                new PerformanceProfileResponse.Entry("ATENCION", 55.0, 3, 20, BEFORE),
+                new PerformanceProfileResponse.Entry("MEMORIA_VISUAL", 72.3, 4, 80, BEFORE));
     }
 }

@@ -8,6 +8,7 @@ import java.util.List;
  */
 public record PerformanceProfileResponse(List<Entry> categories) {
 
-    public record Entry(String category, double score, int level, Instant updatedAt) {
+    /** {@code progress}: puntos dentro del nivel, de 0 (piso) a 100 (techo). */
+    public record Entry(String category, double score, int level, int progress, Instant updatedAt) {
     }
 }

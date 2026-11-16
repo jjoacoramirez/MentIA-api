@@ -43,15 +43,15 @@ class SessionPlannerTest {
 
     @Test
     void primeroUnItemPorCategoriaYDespuesLlenaElTiempo() {
-        List<Choice> choices = planner(12, 1).plan(600, categories(50, 50, 50), Map.of());
+        List<Choice> choices = planner(12, 1).plan(300, categories(50, 50, 50), Map.of());
 
-        assertThat(choices).hasSize(10);
+        assertThat(choices).hasSize(5);
         assertThat(choices.subList(0, 3)).extracting(Choice::categoryId).containsExactly(attention, visual, working);
     }
 
     @Test
     void respetaElTopeDeItems() {
-        assertThat(planner(4, 1).plan(3600, categories(50, 50, 50), Map.of())).hasSize(4);
+        assertThat(planner(4, 1).plan(360, categories(50, 50, 50), Map.of())).hasSize(4);
     }
 
     @Test
@@ -68,12 +68,16 @@ class SessionPlannerTest {
     }
 
     @Test
-    void enLaMismaSesionNoRepiteEjercicioMientrasHayaAlternativas() {
-        List<Choice> choices = planner(12, 7).plan(240, List.of(
+    void enLaMismaSesionNuncaRepiteUnEjercicioAunqueSobreTiempo() {
+        List<Choice> single = planner(12, 7).plan(600, List.of(
                 new CategoryOption(attention, 50, List.of(stroop, oddOne))), Map.of());
+        assertThat(single).extracting(Choice::exerciseId)
+                .containsExactlyInAnyOrder(stroop.exerciseId(), oddOne.exerciseId());
 
-        assertThat(choices).hasSize(4);
-        assertThat(choices.subList(0, 2)).extracting(Choice::exerciseId).doesNotHaveDuplicates();
+        for (long seed = 0; seed < 50; seed++) {
+            List<Choice> all = planner(12, seed).plan(3600, categories(10, 90, 50), Map.of());
+            assertThat(all).hasSize(6).extracting(Choice::exerciseId).doesNotHaveDuplicates();
+        }
     }
 
     @Test
@@ -89,7 +93,7 @@ class SessionPlannerTest {
     void lasCategoriasDeMenorScoreRecibenMasItemsSinExcluirALasDemas() {
         Map<UUID, Integer> counts = new HashMap<>();
         for (long seed = 0; seed < 300; seed++) {
-            planner(12, seed).plan(600, categories(10, 90, 90), Map.of())
+            planner(12, seed).plan(240, categories(10, 90, 90), Map.of())
                     .forEach(c -> counts.merge(c.categoryId(), 1, Integer::sum));
         }
 

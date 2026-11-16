@@ -58,6 +58,7 @@ class TrainingSessionFlowIntegrationTest extends IntegrationTest {
         Set<String> categories = new HashSet<>();
         items.forEach(i -> categories.add(i.get("category").asText()));
         assertThat(categories).containsExactlyInAnyOrder("ATENCION", "MEMORIA_VISUAL", "MEMORIA_TRABAJO");
+        assertThat(items).extracting(i -> i.get("exerciseCode").asText()).doesNotHaveDuplicates();
         assertThat(list(session.get("rationale"))).last()
                 .satisfies(r -> assertThat(r.get("code").asText()).isEqualTo("VARIETY_ROTATION"));
 
@@ -91,6 +92,9 @@ class TrainingSessionFlowIntegrationTest extends IntegrationTest {
         for (JsonNode category : list(result.get("categories"))) {
             int expected = category.get("itemsCompleted").asInt() >= 2 ? 2 : 1;
             assertThat(category.get("difficultyLevelAfter").asInt()).as(category.toString()).isEqualTo(expected);
+            // Cada actividad perfecta suma 25 al progreso (arranca en 50): con dos sube de nivel y vuelve a 50.
+            assertThat(category.get("levelProgressBefore").asInt()).isEqualTo(50);
+            assertThat(category.get("levelProgressAfter").asInt()).isEqualTo(expected == 2 ? 50 : 75);
             if (expected == 2) {
                 raised.add(category.get("category").asText());
             }
@@ -150,6 +154,37 @@ class TrainingSessionFlowIntegrationTest extends IntegrationTest {
         // Una nueva pedida ya no retoma la abandonada.
         assertThat(api.json(api.perform(user, post("/api/v1/sessions")).andExpect(status().isCreated()))
                 .get("id").asText()).isNotEqualTo(id);
+    }
+
+    @Test
+    void conUnaCategoriaSoloTraeEjerciciosDeEsaYReemplazaLaAbiertaSiEsDeOtras() throws Exception {
+        api.skipAssessment(user);
+        String general = api.json(api.perform(user, post("/api/v1/sessions")).andExpect(status().isCreated()))
+                .get("id").asText();
+
+        JsonNode focused = api.json(api.perform(user, post("/api/v1/sessions")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"category\": \"ATENCION\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(matchesContract()));
+        assertThat(list(focused.get("items"))).isNotEmpty()
+                .allSatisfy(i -> assertThat(i.get("category").asText()).isEqualTo("ATENCION"))
+                .extracting(i -> i.get("exerciseCode").asText()).doesNotHaveDuplicates();
+        api.perform(user, get("/api/v1/sessions/{id}", general)).andExpect(jsonPath("$.status").value("ABANDONED"));
+
+        // La misma categoría, o sin categoría, retoma la abierta.
+        String id = focused.get("id").asText();
+        api.perform(user, post("/api/v1/sessions")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"category\": \"ATENCION\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id));
+        api.perform(user, post("/api/v1/sessions")).andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));
+
+        api.perform(user, post("/api/v1/sessions")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"category\": \"NO_EXISTE\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].field").value("category"))
+                .andExpect(matchesContract());
     }
 
     private JsonNode playAndComplete(double accuracy) throws Exception {

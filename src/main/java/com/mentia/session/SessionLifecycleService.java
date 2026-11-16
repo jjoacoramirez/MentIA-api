@@ -9,7 +9,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.UUID;
 
@@ -23,9 +22,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mentia.attempt.AttemptService;
 import com.mentia.attempt.dto.AttemptOutcome;
 import com.mentia.catalog.CatalogService;
+import com.mentia.engine.AdaptationProperties;
 import com.mentia.engine.DifficultyEngine;
 import com.mentia.performance.PerformanceService;
 import com.mentia.performance.dto.CategoryOutcome;
+import com.mentia.performance.dto.PerformanceSnapshot;
 import com.mentia.session.domain.SessionItem;
 import com.mentia.session.domain.SessionStatus;
 import com.mentia.session.domain.SessionType;
@@ -52,6 +53,7 @@ public class SessionLifecycleService {
     private final PerformanceService performanceService;
     private final CatalogService catalogService;
     private final DifficultyEngine difficultyEngine;
+    private final AdaptationProperties adaptation;
     private final ApplicationEventPublisher events;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -59,7 +61,7 @@ public class SessionLifecycleService {
     public SessionLifecycleService(SessionRepository repository, ObjectProvider<SessionRewardsQuery> rewardsQuery,
             SessionService sessionService, AttemptService attemptService,
             PerformanceService performanceService, CatalogService catalogService, DifficultyEngine difficultyEngine,
-            ApplicationEventPublisher events, ObjectMapper objectMapper, Clock clock) {
+            AdaptationProperties adaptation, ApplicationEventPublisher events, ObjectMapper objectMapper, Clock clock) {
         this.repository = repository;
         this.rewardsQuery = rewardsQuery;
         this.sessionService = sessionService;
@@ -67,6 +69,7 @@ public class SessionLifecycleService {
         this.performanceService = performanceService;
         this.catalogService = catalogService;
         this.difficultyEngine = difficultyEngine;
+        this.adaptation = adaptation;
         this.events = events;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -91,14 +94,26 @@ public class SessionLifecycleService {
         outcomes.forEach(o -> byCategory.computeIfAbsent(o.categoryId(), c -> new ArrayList<>()).add(o));
 
         boolean assessment = session.getType() == SessionType.INITIAL_ASSESSMENT;
-        Map<UUID, Integer> levelAfter;
+        Map<UUID, Integer> levelAfter = new LinkedHashMap<>();
+        Map<UUID, Integer> progressBefore = new HashMap<>();
+        Map<UUID, Integer> progressAfter = new HashMap<>();
         if (assessment) {
-            levelAfter = performanceService.applyInitialAssessment(userId, accuracies(byCategory));
+            levelAfter.putAll(performanceService.applyInitialAssessment(userId, accuracies(byCategory)));
+            performanceService.current(userId).forEach((category, snapshot) ->
+                    progressAfter.put(category, snapshot.levelProgress()));
         } else {
-            levelAfter = adaptLevels(session, levelBefore, byCategory);
+            Map<UUID, PerformanceSnapshot> current = performanceService.current(userId);
+            Map<UUID, DifficultyEngine.Decision> decisions = adaptLevels(session, levelBefore, current, byCategory);
             Map<UUID, CategoryOutcome> sessionOutcomes = new LinkedHashMap<>();
-            accuracies(byCategory).forEach((category, list) ->
-                    sessionOutcomes.put(category, new CategoryOutcome(list, levelAfter.get(category))));
+            decisions.forEach((category, decision) -> {
+                levelAfter.put(category, decision.level());
+                progressAfter.put(category, decision.progress());
+                if (current.containsKey(category)) {
+                    progressBefore.put(category, current.get(category).levelProgress());
+                }
+                sessionOutcomes.put(category, new CategoryOutcome(accuracies(byCategory).get(category),
+                        decision.level(), decision.progress()));
+            });
             performanceService.recordSession(userId, sessionOutcomes);
         }
 
@@ -109,7 +124,8 @@ public class SessionLifecycleService {
             int before = levelBefore.getOrDefault(categoryId, levelAfter.get(categoryId));
             int after = levelAfter.getOrDefault(categoryId, before);
             categories.add(new CategoryResult(code, categoryOutcomes.size(), meanAccuracy(categoryOutcomes),
-                    meanResponseTime(categoryOutcomes), before, after));
+                    meanResponseTime(categoryOutcomes), before, after, progressBefore.get(categoryId),
+                    progressAfter.get(categoryId)));
             adaptations.add(Adaptation.between(code, before, after));
         });
 
@@ -177,26 +193,30 @@ public class SessionLifecycleService {
                 .orElse(null);
     }
 
-    /** Nivel con el que sigue cada categoría según el motor adaptativo (BACK-10). */
-    private Map<UUID, Integer> adaptLevels(TrainingSession session, Map<UUID, Integer> levelBefore,
-            Map<UUID, List<AttemptOutcome>> byCategory) {
+    /**
+     * Nivel y progreso con los que sigue cada categoría según el motor adaptativo (BACK-10): cada actividad suma o
+     * resta puntos sobre el progreso con el que la categoría llegó a la sesión.
+     */
+    private Map<UUID, DifficultyEngine.Decision> adaptLevels(TrainingSession session, Map<UUID, Integer> levelBefore,
+            Map<UUID, PerformanceSnapshot> current, Map<UUID, List<AttemptOutcome>> byCategory) {
         Map<UUID, Integer> targetByItem = new HashMap<>();
         session.getItems().forEach(item -> {
             if (item.getTargetResponseMs() != null) {
                 targetByItem.put(item.getId(), item.getTargetResponseMs());
             }
         });
-        Map<UUID, Integer> levels = new LinkedHashMap<>();
+        Map<UUID, DifficultyEngine.Decision> decisions = new LinkedHashMap<>();
         byCategory.forEach((categoryId, list) -> {
-            OptionalDouble timeRatio = list.stream()
-                    .filter(o -> targetByItem.containsKey(o.sessionItemId()))
-                    .mapToDouble(o -> (double) o.responseTimeMs() / targetByItem.get(o.sessionItemId()))
-                    .average();
-            DifficultyEngine.CategoryStats stats = new DifficultyEngine.CategoryStats(list.size(), meanAccuracy(list),
-                    timeRatio.isPresent() ? timeRatio.getAsDouble() : null);
-            levels.put(categoryId, difficultyEngine.nextLevel(levelBefore.get(categoryId), stats).level());
+            List<DifficultyEngine.Activity> activities = list.stream()
+                    .map(o -> new DifficultyEngine.Activity(o.accuracy(), targetByItem.containsKey(o.sessionItemId())
+                            ? (double) o.responseTimeMs() / targetByItem.get(o.sessionItemId())
+                            : null))
+                    .toList();
+            PerformanceSnapshot snapshot = current.get(categoryId);
+            int progress = snapshot != null ? snapshot.levelProgress() : adaptation.levelProgress().start();
+            decisions.put(categoryId, difficultyEngine.next(levelBefore.get(categoryId), progress, activities));
         });
-        return levels;
+        return decisions;
     }
 
     private static Map<UUID, List<Double>> accuracies(Map<UUID, List<AttemptOutcome>> byCategory) {
