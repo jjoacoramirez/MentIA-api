@@ -1,0 +1,1 @@
+-- Migración inicial vacía: valida que Flyway corre contra la base.

@@ -1,0 +1,7 @@
+# Valores solo para tests. Los reales vienen del entorno.
+spring:
+  datasource:
+    password: test
+mentia:
+  security:
+    jwt-secret: test-only-secret-test-only-secret-0123456789

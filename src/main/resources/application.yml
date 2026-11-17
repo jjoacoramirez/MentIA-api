@@ -1,0 +1,144 @@
+server:
+  # Railway (y otros hosts) indican el puerto con PORT.
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: mentia-api
+  profiles:
+    default: dev
+  datasource:
+    url: ${MENTIA_DB_URL:jdbc:postgresql://localhost:5432/mentia}
+    username: ${MENTIA_DB_USER:mentia}
+    password: ${MENTIA_DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+    time-zone: UTC
+
+mentia:
+  security:
+    jwt-secret: ${MENTIA_JWT_SECRET}
+    jwt-ttl: 24h
+    # Limpieza de la denylist de tokens (los vencidos ya no hace falta guardarlos).
+    revoked-token-cleanup-cron: "0 0 * * * *"
+  auth:
+    recovery:
+      # Intentos fallidos seguidos de recuperación por username antes de bloquearla por un tiempo.
+      max-attempts: 5
+      lockout: 15m
+  # Umbrales y pesos del motor (docs/plan-backend.md, sección 7). Se completa en BACK-10.
+  progress:
+    # Los "días" de actividad y de racha se cuentan en esta zona (no se guarda la ubicación del usuario).
+    time-zone: America/Argentina/Buenos_Aires
+    streaks-enabled: true
+    # Sesiones completadas por día como objetivo. 0 = sin objetivo diario (el resumen devuelve dailyGoal: null).
+    daily-goal-sessions: 0
+  metrics:
+    # Panel admin: los usuarios se agrupan por días con al menos una sesión completada.
+    time-zone: ${mentia.progress.time-zone}
+    consistency-groups: [1, 2, 4, 8]   # 1 día, 2 a 3, 4 a 7 y 8 o más (más el grupo sin sesiones)
+    include-admins: false              # las cuentas admin son de prueba
+  gamification:
+    # XP por sesión completada = xp-per-session + xp-per-item × ítems + bonus (si precisión >= accuracy-bonus-threshold).
+    xp-per-session: 10
+    xp-per-item: 2
+    xp-accuracy-bonus: 5
+    accuracy-bonus-threshold: 0.8
+    # Pasar del nivel n al n+1 requiere xp-per-level-factor × n XP.
+    xp-per-level-factor: 100
+  # Capa de IA (IA-01). Fuera del motor: la IA nunca decide dificultad ni selecciona ejercicios.
+  # Para activarla: MENTIA_AI_ENABLED=true y MENTIA_AI_API_KEY en el entorno (la key nunca va acá).
+  # El proveedor se elige con MENTIA_AI_PROVIDER (openai o anthropic); la key tiene que ser de ese proveedor.
+  ai:
+    enabled: ${MENTIA_AI_ENABLED:false}
+    provider: ${MENTIA_AI_PROVIDER:openai}
+    api-key: ${MENTIA_AI_API_KEY:}
+    openai:
+      # Sin razonamiento: no gasta tokens ocultos y no necesita effort.
+      model: gpt-4o-mini
+      base-url: https://api.openai.com
+      effort: ""
+      # USD por millón de tokens de gpt-4o-mini (tarifa estándar, developers.openai.com/api/docs/pricing, nov 2026).
+      pricing:
+        input-usd-per-million: 0.15
+        output-usd-per-million: 0.60
+    anthropic:
+      model: claude-haiku-5-5
+      base-url: https://api.anthropic.com
+      api-version: "2023-06-01"
+      # Los modelos nuevos piensan por defecto y esos tokens se cobran como salida; "low" para contenido corto.
+      effort: low
+      # USD por millón de tokens de Haiku 5.5 (verificado en la doc oficial: vale hasta 100.000 tokens de prompt;
+      # arriba de eso el precio sube). max-prompt-chars mantiene los prompts muy por debajo de ese umbral.
+      pricing:
+        input-usd-per-million: 0.10
+        output-usd-per-million: 0.50
+    connect-timeout: 3s
+    read-timeout: 20s
+    max-retries: 2
+    retry-backoff: 500ms           # se duplica en cada reintento
+    limits:
+      global-daily-usd: 2.00
+      global-monthly-usd: 20.00
+      # Solo para usos disparados por una persona (feedback). La generación por lotes es costo global.
+      user-monthly-usd: 0.10
+      user-daily-calls: 5
+      max-tokens-per-call: 1024
+      max-prompt-chars: 8000
+    circuit-breaker:
+      failure-threshold: 5          # fallas transitorias seguidas para abrirlo
+      open-duration: 60s
+      half-open-calls: 1
+  session:
+    # Una sesión GENERATED o IN_PROGRESS más vieja que esto se abandona al pedir una nueva.
+    stale-after: 12h
+  engine:
+    # Nivel de los ítems de la evaluación inicial y rango de niveles.
+    initial-level: 3
+    level-min: 1
+    level-max: 10
+    # Peso de la sesión nueva en el score: score = score × (1 − α) + scoreSesión × α.
+    ema-alpha: 0.3
+    # Ajuste de nivel por categoría (propuesta inicial de la sección 7 del plan). Cada actividad suma o resta
+    # puntos al progreso dentro del nivel (0 a 100): al llegar a 100 sube un nivel, al llegar a 0 baja uno.
+    accuracy-up: 0.85                # suma si la precisión es >= esto...
+    response-time-tolerance: 1.25    # ...con todos los puntos si el tiempo <= tiempo objetivo × tolerancia
+    accuracy-down: 0.60              # resta si la precisión es < esto
+    level-progress:
+      start: 50                      # progreso al entrar a un nivel
+      points-up: 25                  # actividad con precisión alta y a tiempo
+      points-up-slow: 10             # actividad con precisión alta pero lenta
+      points-down: 25                # lo que resta una actividad con precisión baja
+    assessment:
+      exercises-per-category: 2
+      # Nivel inicial según la precisión promedio por categoría: se toma el primer umbral alcanzado.
+      initial-levels:
+        - { min-accuracy: 0.90, level: 5 }
+        - { min-accuracy: 0.75, level: 4 }
+        - { min-accuracy: 0.60, level: 3 }
+        - { min-accuracy: 0.40, level: 2 }
+        - { min-accuracy: 0.00, level: 1 }
+    selection:
+      # Peso de una categoría al repartir ítems: 1 + boost × (100 − score) / 100. Ninguna queda en 0.
+      weak-category-boost: 1.0
+      # Tope de ítems por sesión, aunque sobre tiempo.
+      max-items: 12
+    rotation:
+      # Cuántas sesiones hacia atrás se miran para penalizar lo usado recientemente.
+      lookback-sessions: 5
+      # Lo usado en la sesión anterior no se repite si hay alternativas.
+      avoid-last-session: true
+      # Peso de un ejercicio o variante usado hace 1, 2, ... 5 sesiones (lo no usado pesa 1.0).
+      recency-weights: [0.0, 0.25, 0.5, 0.75, 1.0]

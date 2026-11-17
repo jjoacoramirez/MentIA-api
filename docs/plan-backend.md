@@ -173,6 +173,12 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - Si ya hay una evaluación `GENERATED` o `IN_PROGRESS`, la devuelve (`200`) para poder retomar. Con `restart=true` abandona la anterior y crea una nueva.
 - El cierre usa `SessionService.complete` con una implementación mínima: calcula el nivel inicial por categoría según `accuracy` (tabla de la sección 7) y publica `assessment_completed`. BACK-13 completa el cierre general.
 - Sin interpretación médica en ningún texto de respuesta.
+- Decisiones tomadas al implementarlo:
+  - La tabla `performance_profiles` se crea en este ticket con el nivel inicial. BACK-08 suma la actualización por sesión y `GET /profile/performance`.
+  - Este ticket incluye `POST /sessions/{id}/start` y un `POST /sessions/{id}/complete` mínimo, para que la evaluación se pueda usar de punta a punta. BACK-09 y BACK-13 los completan para sesiones de entrenamiento.
+  - Cada ítem de la evaluación usa la primera variante activa del ejercicio, así la evaluación es comparable entre usuarios.
+  - Una categoría sin intentos al cerrar cuenta como precisión 0, es decir, nivel 1.
+  - **Saltear la evaluación es solo para admins (debug):** `POST /assessment/skip` deja `level-min` en todas las categorías del MVP. No marca la evaluación como completada. El rol `ADMIN` se asigna a mano en la base.
 
 ### BACK-11 Motor de rotación (SCRUM-25)
 - `RotationPolicy` aplicado a ejercicios y variantes. Reglas en la sección 7. Implementa `VariantSelector` de BACK-05.
@@ -183,43 +189,107 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - `GET /profile/performance`: score (0 a 100) y nivel (1 a 10) por categoría. La descripción del schema aclara que es desempeño dentro de MentIA.
 
 ### BACK-10 Motor adaptativo (SCRUM-24)
-- `DifficultyEngine.nextLevel(currentLevel, categoryStats)` como función pura con reglas de la sección 7. Todo parametrizado en `mentia.engine`.
+- `DifficultyEngine.next(currentLevel, currentProgress, activities)` como función pura con reglas de la sección 7. Todo parametrizado en `mentia.engine`.
 - Tests unitarios dirigidos por tabla (casos de borde: nivel mínimo y máximo, pocas muestras, respuesta lenta).
 - **Los umbrales de la sección 7 son una propuesta. El ticket pide definirlos y documentarlos antes de implementar: validarlos con el equipo primero.**
+- Implementado con los valores propuestos (`mentia.engine.accuracy-up`, `accuracy-down`, `response-time-tolerance` y `level-progress.*`). **Siguen pendientes de validación con el equipo.** Cambiarlos es solo editar `application.yml`.
+- Progreso dentro del nivel (decisión posterior, reemplaza el mínimo de 2 ítems por categoría): con ese mínimo, en una sesión combinada las categorías con un solo ítem nunca se ajustaban. Ahora cada actividad suma o resta puntos y el progreso se acumula entre sesiones (`performance_profiles.level_progress`, V15). Se expone en `GET /profile/performance` (`progress`) y en el resultado de la sesión (`levelProgressBefore` y `levelProgressAfter`).
+- El tiempo se compara por actividad: `respuesta / objetivo` de cada intento que tiene objetivo.
+- El refuerzo de una categoría con precisión baja se da a través del score: baja, y en la próxima sesión la categoría pesa más en la selección.
 
 ### BACK-09 Generación de sesión (SCRUM-23)
-- `POST /sessions {durationMinutes}`. Si no hay evaluación inicial completada: `409 ASSESSMENT_REQUIRED`.
-- Si ya hay una sesión de entrenamiento `GENERATED` o `IN_PROGRESS` no vencida, la devuelve (`200`).
+- `POST /sessions {durationMinutes, category}`. Si no hay evaluación inicial completada: `409 ASSESSMENT_REQUIRED`.
+- `category` es opcional: si se indica (código de una categoría activa del MVP), la sesión solo trae ejercicios de esa categoría y solo ajusta su nivel. Desde la pantalla de Juegos se entrena un área por vez.
+- Si ya hay una sesión de entrenamiento `GENERATED` o `IN_PROGRESS` no vencida, la devuelve (`200`). Excepción: si se pide una `category` y la abierta tiene ejercicios de otras, la abierta se abandona y se genera una nueva.
 - Cantidad de ítems: se llena el presupuesto de tiempo sumando `estimated_seconds` del nivel correspondiente.
 - Selección de categorías y rotación según sección 7. Nivel de cada ítem = nivel actual del usuario en la categoría.
 - Devuelve `rationale`: lista estructurada de motivos con texto en es-AR no clínico (lo necesita FRONT-22).
 - `POST /sessions/{id}/start` pasa a `IN_PROGRESS`.
+- Decisiones tomadas al implementarlo:
+  - El punto de partida exigido es tener perfil de desempeño: evaluación completada, o salteada por un admin.
+  - Dentro de una sesión nunca se repite un ejercicio. Si se acaban los ejercicios disponibles, la sesión dura menos que lo pedido (hoy hay 2 por categoría: hasta 2 ítems en una sesión de una categoría y hasta 6 en una combinada).
+  - Tope de ítems por sesión: `mentia.engine.selection.max-items`, 12 por defecto.
+  - `rationale` incluye:
+    - `FOCUS_LOWER_PERFORMANCE` solo si la categoría de menor score recibió más ítems que las demás;
+    - `LEVEL_UP` y `LEVEL_DOWN` según la última sesión completada;
+    - `VARIETY_ROTATION` siempre.
 
 ### BACK-13 Resultado de sesión (SCRUM-27)
 - `POST /sessions/{id}/complete` consolida: ítems, aciertos, errores, tiempo total, resultados por categoría, nivel alcanzado, adaptaciones (usa `DifficultyEngine`), comparación con la sesión anterior del mismo usuario. Guarda el snapshot en `training_sessions.result`.
 - Actualiza `performance_profiles` y publica `SessionCompletedEvent`.
 - `POST /sessions/{id}/abandon` y `GET /sessions/{id}/result`.
 - La comparación se limita al propio usuario y a desempeño dentro de MentIA.
+- Implementado así:
+  - La comparación se hace contra la última sesión completada **del mismo tipo**.
+  - Las recompensas entran al resultado a través de `SessionRewardsQuery`, que implementa gamificación; `session` no la conoce.
 
 ### BACK-14 Historial y progreso (SCRUM-28)
 - `GET /sessions` (paginado), `GET /progress/summary`, `GET /progress/categories?granularity=week|month`.
 - Agregaciones en SQL, no en memoria. Revisar índices.
+- Implementado así:
+  - Modelo de lectura en el módulo `progress`, con consultas SQL de solo lectura e índices en `V11`.
+  - La racha está habilitada (`mentia.progress.streaks-enabled`). El objetivo diario queda en `null` (`daily-goal-sessions: 0`) hasta que se confirme el ajuste 4.
 
 ### BACK-18 Gamificación básica (SCRUM-29)
 - Escucha `SessionCompletedEvent`. XP, nivel general y, si se confirma, racha y objetivo diario (ver ajuste 4).
 - `GET /gamification/me`. Fórmulas en sección 7. Nada de lenguaje clínico.
+- Implementado así:
+  - Toda sesión completada suma XP, también la evaluación inicial. Saltearla como admin no suma.
+  - El XP se otorga una sola vez por sesión (`session_rewards`).
+  - El umbral del bonus de precisión es configurable (`accuracy-bonus-threshold`).
 
 ### BACK-19 Logros (SCRUM-30)
 - Catálogo `achievements` sembrado (ej. completar 1, 5 y 10 sesiones, alcanzar nivel 3, completar ejercicios de las 3 categorías). Evaluador que escucha `SessionCompletedEvent`.
 - `GET /achievements` con estado de cada uno.
+- Implementado así:
+  - Tipos de condición: `sessions_completed`, `level_reached` y `categories_practiced`.
+  - Un logro nuevo de esos tipos es solo una fila. Un tipo nuevo requiere código en `AchievementRules`.
 
 ### BACK-21 Métricas internas (SCRUM-31)
 - Todos los eventos se registran **del lado servidor** en `events`: `user_registered`, `onboarding_completed`, `assessment_completed`, `session_generated`, `session_started`, `session_completed`, `session_abandoned`, `difficulty_adapted`.
 - Migración con vistas SQL (`v_mvp_metrics_*`) para consultar: usuarios registrados, % que completa la evaluación, sesiones iniciadas, completadas y abandonadas, frecuencia de uso, ejercicios completados y adaptaciones. Sin dashboard.
 - No hay endpoint de eventos para el cliente (ver ajuste 3).
+- Panel admin (agregado después): `GET /api/v1/admin/metrics/consistency`, solo ADMIN. Agrupa a los usuarios por constancia (días con al menos una sesión de entrenamiento completada, en `mentia.metrics.time-zone`; cortes en `mentia.metrics.consistency-groups`) y devuelve por grupo: usuarios, sesiones completadas y abandonadas, precisión de la primera y la última sesión (usuarios con 2 o más) y cambio de nivel por área desde la primera sesión. Solo agregados: no expone alias, UUID ni datos de un usuario, y no se muestra a usuarios comunes (regla 5). Excluye las cuentas ADMIN salvo `include-admins: true`. Con grupos chicos los promedios son poco representativos.
 
 ### BACK-15, 16, 17 Post-MVP
 - No implementar. Solo se mantiene el paquete `episodic/` vacío.
+
+### IA-01 Infraestructura de IA con límites de costo
+**Alcance.** Deja lista la capa para llamar a un modelo de lenguaje de forma segura y barata. Sirve a dos usos futuros, ambos **fuera del motor**: (a) generación de contenido por lotes (por ejemplo listas de palabras), antes de que el usuario lo necesite, validada y guardada como filas; (b) feedback en lenguaje natural sobre el progreso. La IA nunca decide dificultad, nivel ni qué ejercicios se asignan (regla 3 de `CLAUDE.md`), y no se llama en medio de una sesión. En esta etapa ningún flujo de usuario la usa. No agrega endpoints, por lo que `openapi.yaml` no cambia.
+
+**Piezas** (paquete `com.mentia.ai`):
+- `AiClient` (puerto) con `OpenAiClient` (Chat Completions) y `AnthropicAiClient` (Messages), ambos con RestClient, timeout corto y reintentos con backoff solo ante fallas transitorias; y `DisabledAiClient` (cuando `mentia.ai.enabled=false` o falta `MENTIA_AI_API_KEY`). El proveedor se elige con `mentia.ai.provider`.
+- `AiBudgetGuard`: verifica los límites antes de cada llamada y registra el uso real después. Los límites son blandos (se compara el gasto ya registrado); la barrera dura es el tope de gasto mensual en la consola del proveedor, que se configura aparte.
+- `GuardedAiService`: único punto de entrada (límites → circuit breaker → proveedor → registro). Toda falla sale como `AiUnavailableException` con un motivo (`DISABLED`, `LIMIT_EXCEEDED`, `CIRCUIT_OPEN`, `PROVIDER_ERROR`); el consumidor debe tener fallback.
+- Circuit breaker con Resilience4j (`resilience4j-circuitbreaker`, solo el núcleo): se abre tras N fallas transitorias seguidas. Las no transitorias (key inválida, pedido rechazado) no cuentan.
+
+**Datos** (migración `V13__ai_usage.sql`):
+- `ai_usage`: un registro por intento (día UTC, propósito, modelo, tokens, costo en micro-USD, resultado `OK`/`ERROR`/`BLOCKED`). Sin `user_id` ni contenido de prompts.
+- `ai_user_quota`: contadores por usuario y día (llamadas, costo) solo para los usos disparados por una persona. `ON DELETE CASCADE`; sin contenido.
+- Los costos son enteros en micro-USD (1 USD = 1.000.000). Se calculan con los tokens reales que devuelve la API y se redondean hacia arriba.
+
+**Configuración** (`mentia.ai.*` en `application.yml`; nada hardcodeado):
+
+| Propiedad | Valor inicial | Uso |
+|---|---|---|
+| `enabled` | `false` | Interruptor general. Para activar: `MENTIA_AI_ENABLED=true` y `MENTIA_AI_API_KEY` en el entorno |
+| `provider` | `openai` | `openai` o `anthropic` (`MENTIA_AI_PROVIDER`); la key tiene que ser de ese proveedor |
+| `openai.model` / `anthropic.model` | `gpt-4o-mini` / `claude-haiku-5-5` | Modelo de cada proveedor |
+| `openai.effort` / `anthropic.effort` | vacío / `low` | Razonamiento. `gpt-4o-mini` no razona y rechaza el parámetro; Haiku piensa por defecto y esos tokens se cobran como salida |
+| `connect-timeout` / `read-timeout` | `3s` / `20s` | Timeouts |
+| `max-retries` / `retry-backoff` | `2` / `500ms` | Reintentos con backoff exponencial |
+| `openai.pricing` (entrada / salida, USD por millón) | `0.15` / `0.60` | Tarifa estándar de `gpt-4o-mini` (nov 2026) |
+| `anthropic.pricing` (entrada / salida, USD por millón) | `0.10` / `0.50` | Precio de Haiku 5.5 hasta 100.000 tokens de prompt (arriba de eso sube) |
+| `limits.global-daily-usd` / `global-monthly-usd` | `2.00` / `20.00` | Presupuesto global |
+| `limits.user-monthly-usd` / `user-daily-calls` | `0.10` / `5` | Por usuario; solo usos disparados por una persona |
+| `limits.max-tokens-per-call` / `max-prompt-chars` | `1024` / `8000` | Tamaño por llamada |
+| `circuit-breaker.failure-threshold` / `open-duration` / `half-open-calls` | `5` / `60s` / `1` | Corte tras fallas seguidas |
+
+Un límite en `0` actúa como interruptor: bloquea todo uso de ese tipo.
+
+**Privacidad.** Al proveedor solo se le mandan parámetros del ejercicio (categoría, nivel, cantidad), nunca IDs, emails ni datos de usuario. No se loguean la key ni prompts completos: `AiProperties`, `AiRequest` y `AiResponse` redactan su `toString`, y los mensajes de error llevan solo el código HTTP. La generación por lotes es costo global y no cuenta contra la cuota de ningún usuario.
+
+**Fuera de alcance de esta etapa:** el ejercicio que usa palabras, el generador por lotes con su validación y biblioteca de respaldo, el feedback en lenguaje natural y un endpoint de administración para disparar lotes.
 
 ## 7. Reglas del motor (propuesta inicial, validar antes de BACK-10)
 
@@ -236,10 +306,15 @@ mentia:
     ema-alpha: 0.3              # peso de la sesión nueva en el score
     accuracy-up: 0.85           # subir nivel si accuracy >= este valor
     accuracy-down: 0.60         # bajar nivel si accuracy < este valor
-    response-time-tolerance: 1.25   # tiempo promedio <= target * tolerancia para poder subir
-    min-items-for-adaptation: 2     # ítems de la categoría en la sesión para ajustar nivel
+    response-time-tolerance: 1.25   # tiempo <= target * tolerancia para sumar todos los puntos
+    level-progress:
+      start: 50                 # progreso (0 a 100) al entrar a un nivel
+      points-up: 25             # actividad con accuracy >= accuracy-up y a tiempo
+      points-up-slow: 10        # actividad con accuracy >= accuracy-up pero lenta
+      points-down: 25           # lo que resta una actividad con accuracy < accuracy-down
     selection:
       weak-category-boost: 1.0  # peso = 1 + boost * (100 - score) / 100
+      max-items: 12             # tope de ítems por sesión
     rotation:
       lookback-sessions: 5
       avoid-last-session: true
@@ -247,19 +322,29 @@ mentia:
   gamification:
     xp-per-session: 10
     xp-per-item: 2
-    xp-accuracy-bonus: 5        # si accuracy de la sesión >= 0.8
+    xp-accuracy-bonus: 5        # si accuracy de la sesión >= accuracy-bonus-threshold
+    accuracy-bonus-threshold: 0.8
     xp-per-level-factor: 100    # pasar del nivel n al n+1 requiere 100 * n XP
+  progress:
+    time-zone: America/Argentina/Buenos_Aires
+    streaks-enabled: true
+    daily-goal-sessions: 0      # 0 = sin objetivo diario
 ```
 
 **Nivel inicial desde la evaluación** (`accuracy` promedio por categoría): `>= 0.90` → 5, `>= 0.75` → 4, `>= 0.60` → 3, `>= 0.40` → 2, resto → 1. El score inicial se calcula como `100 × accuracy`.
 
 **Score de desempeño por categoría:** `scoreSesión = 100 × promedio(accuracy)` de los ítems de esa categoría. `score = score × (1 − α) + scoreSesión × α`.
 
-**Ajuste de nivel por categoría al completar una sesión:**
-- Si hay menos de `min-items-for-adaptation` ítems de la categoría → mantener.
-- `accuracy >= accuracy-up` y (el ejercicio no tiene `target_response_ms` o el tiempo promedio `<= target × tolerancia`) → subir 1 (tope `level-max`).
-- `accuracy < accuracy-down` → bajar 1 (piso `level-min`) y la categoría queda reforzada (mayor peso en la próxima selección).
-- En cualquier otro caso → mantener.
+**Ajuste de nivel por categoría al completar una sesión (progreso dentro del nivel):**
+- Cada categoría tiene un progreso de 0 (piso) a 100 (techo) dentro de su nivel. Arranca en `level-progress.start` (50) al fijar el punto de partida y cada vez que cambia de nivel.
+- Cada actividad de la categoría en la sesión suma o resta:
+  - `accuracy >= accuracy-up` y (el ejercicio no tiene `target_response_ms` o `tiempo <= target × tolerancia`) → `+points-up` (25).
+  - `accuracy >= accuracy-up` pero más lenta → `+points-up-slow` (10).
+  - `accuracy < accuracy-down` → `−points-down` (25).
+  - En cualquier otro caso → 0.
+- Si el progreso llega a 100 → subir 1 y volver a 50; si llega a 0 → bajar 1 y volver a 50. Una sesión mueve como mucho un nivel. En `level-max` el progreso queda en 100 y en `level-min` en 0.
+- Con los valores propuestos: desde el medio del nivel hacen falta 2 actividades altas para subir (o 2 bajas para bajar); desde cerca del piso (≤ 25) alcanza con una sola actividad baja para bajar, y lo mismo cerca del techo (≥ 75) para subir.
+- Una categoría con precisión baja también baja su score, y en la próxima sesión pesa más en la selección.
 
 **Selección de categorías para una sesión:** primero 1 ítem por categoría MVP activa si caben en el tiempo; el resto por sorteo ponderado con `peso = 1 + boost × (100 − score) / 100`. Las categorías de menor desempeño pesan más, pero ninguna queda excluida.
 
