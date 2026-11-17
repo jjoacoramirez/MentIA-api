@@ -254,6 +254,44 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /admin/notifications/test:
+    post:
+      tags: [Admin]
+      operationId: sendTestPush
+      summary: Manda un aviso de prueba a una cuenta (solo ADMIN, debug)
+      description: |
+        Manda ahora el aviso de recordatorio a los dispositivos de la cuenta indicada, sin mirar su racha ni el
+        límite de un aviso por día, y sin contar como el recordatorio del día. Devuelve solo conteos, nunca las URLs de
+        suscripción. Una suscripción que el servicio de push dice que ya no existe se borra. Con el servidor sin
+        recordatorios responde 503 `PUSH_DISABLED`; con un alias inexistente, 404 `USER_NOT_FOUND`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestPushRequest'
+      responses:
+        '200':
+          description: Resultado del envío
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestPushResult'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: Los recordatorios no están habilitados en el servidor (`PUSH_DISABLED`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
   /admin/metrics/consistency:
     get:
       tags: [Admin]
@@ -844,6 +882,23 @@ components:
           type: string
           nullable: true
           description: Clave pública VAPID en base64url. Null si los recordatorios están apagados.
+    TestPushRequest:
+      type: object
+      required: [username]
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+          maxLength: 30
+          pattern: '^[A-Za-z0-9_.]*$'
+    TestPushResult:
+      type: object
+      required: [devices, sent, removed, failed]
+      properties:
+        devices: {type: integer, description: Dispositivos de la cuenta con el recordatorio activado}
+        sent: {type: integer}
+        removed: {type: integer, description: Suscripciones que ya no existían y se borraron}
+        failed: {type: integer}
     PushSubscriptionRequest:
       type: object
       required: [endpoint]

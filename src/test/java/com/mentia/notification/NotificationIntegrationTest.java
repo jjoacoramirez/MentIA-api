@@ -37,6 +37,7 @@ class NotificationIntegrationTest extends IntegrationTest {
 
     @Autowired NotificationService service;
     @Autowired StreakReminderJob job;
+    @Autowired PushTestService pushTest;
     @Autowired JdbcTemplate jdbc;
     @Autowired ApiClient api;
     @Autowired Clock clock;
@@ -148,6 +149,24 @@ class NotificationIntegrationTest extends IntegrationTest {
 
         assertThat(job.run(today)).isZero();
         assertThat(subscriptionsOf(user.id())).isZero();
+    }
+
+    @Test
+    void adminTestPushReachesEveryDeviceWithoutStreakAndWithoutUsingUpTheDay() throws Exception {
+        var user = api.newUser();
+        service.subscribe(user.id(), endpoint("t1"));
+        service.subscribe(user.id(), endpoint("t2"));
+        given(sender.send(endpoint("t1"))).willReturn(PushSender.Result.SENT);
+        given(sender.send(endpoint("t2"))).willReturn(PushSender.Result.GONE);
+
+        // Sin ninguna sesión (sin racha) igual se manda: es una prueba.
+        var result = pushTest.send(user.username().toUpperCase());
+
+        assertThat(result).isEqualTo(new com.mentia.notification.dto.TestPushResponse(2, 1, 1, 0));
+        assertThat(subscriptionsOf(user.id())).isEqualTo(1);
+        // La prueba no consume el recordatorio del día.
+        assertThat(jdbc.queryForObject("SELECT last_reminded_on FROM push_subscriptions WHERE user_id = ?",
+                java.sql.Date.class, user.id())).isNull();
     }
 
     private void completedSession(UUID user, OffsetDateTime at) {

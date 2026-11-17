@@ -27,6 +27,14 @@ public class NotificationService {
         }
     }
 
+    /** Dispositivo de una cuenta. No imprime la URL: identifica un dispositivo. */
+    record Device(UUID subscriptionId, String endpoint) {
+        @Override
+        public String toString() {
+            return "Device[subscriptionId=" + subscriptionId + "]";
+        }
+    }
+
     private final PushSubscriptionRepository repository;
     private final NotificationProperties properties;
     private final PushEndpointPolicy policy;
@@ -79,6 +87,12 @@ public class NotificationService {
     List<Due> due(LocalDate today) {
         return repository.findDue(today).stream()
                 .map(s -> new Due(s.getId(), s.getUserId(), s.getEndpoint())).toList();
+    }
+
+    @Transactional(readOnly = true)
+    List<Device> devicesOf(UUID userId) {
+        return repository.findByUserIdOrderByCreatedAtAsc(userId).stream()
+                .map(s -> new Device(s.getId(), s.getEndpoint())).toList();
     }
 
     @Transactional
