@@ -28,6 +28,7 @@ tags:
   - name: Sesiones
   - name: Progreso
   - name: Gamificacion
+  - name: Notificaciones
   - name: Admin
 
 paths:
@@ -565,6 +566,72 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /notifications/push-config:
+    get:
+      tags: [Notificaciones]
+      operationId: getPushConfig
+      summary: Configuración de las notificaciones push
+      description: |
+        Indica si los recordatorios están habilitados en el servidor y devuelve la clave pública VAPID que el
+        navegador necesita para suscribirse. La clave pública no es un secreto. Con `enabled: false` no hay clave.
+      responses:
+        '200':
+          description: Configuración vigente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notifications/push-subscription:
+    put:
+      tags: [Notificaciones]
+      operationId: subscribePush
+      summary: Activa los recordatorios de racha en este navegador
+      description: |
+        Registra la suscripción del navegador para el usuario actual. Es idempotente. Solo se guarda la URL de la
+        suscripción (no hay claves de cifrado: el aviso va sin contenido) y solo se aceptan URLs https de los
+        servicios de push conocidos. Con el servidor sin claves responde 503 `PUSH_DISABLED`. Se guardan hasta 5
+        suscripciones por usuario; al pasarse, se descartan las más viejas.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscriptionRequest'
+      responses:
+        '204':
+          description: Suscripción registrada
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Los recordatorios no están habilitados en el servidor (`PUSH_DISABLED`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+    delete:
+      tags: [Notificaciones]
+      operationId: unsubscribePush
+      summary: Desactiva los recordatorios en este navegador
+      description: Borra la suscripción indicada si es del usuario actual. Si no existe, también responde 204.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscriptionRequest'
+      responses:
+        '204':
+          description: Suscripción eliminada
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /admin/metrics:
     get:
       tags: [Progreso]
@@ -698,6 +765,24 @@ components:
               name: {type: string}
               category: {type: string}
               categoryName: {type: string}
+    PushConfig:
+      type: object
+      required: [enabled, publicKey]
+      properties:
+        enabled: {type: boolean}
+        publicKey:
+          type: string
+          nullable: true
+          description: Clave pública VAPID en base64url. Null si los recordatorios están apagados.
+    PushSubscriptionRequest:
+      type: object
+      required: [endpoint]
+      additionalProperties: false
+      properties:
+        endpoint:
+          type: string
+          maxLength: 2048
+          description: URL de suscripción (`PushSubscription.endpoint`) que entrega el navegador.
     ProblemDetail:
       type: object
       required: [title, status, code]

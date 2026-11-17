@@ -1,0 +1,16 @@
+package com.mentia.notification;
+
+/** Puerto de salida hacia el servicio de push del navegador. */
+interface PushSender {
+
+    enum Result {
+        /** El servicio de push aceptó el aviso. */
+        SENT,
+        /** La suscripción ya no existe (404/410): hay que borrarla. */
+        GONE,
+        /** Falla transitoria o rechazo: se reintenta en la próxima corrida. */
+        FAILED
+    }
+
+    Result send(String endpoint);
+}
