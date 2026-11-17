@@ -65,6 +65,23 @@ public class ProgressService {
                 last30.size(), queries.lastCompletedAt(userId), streak, dailyGoal, gamificationService.state(userId));
     }
 
+    /** Zona en la que se cuentan los días de actividad y de racha. */
+    public ZoneId timeZone() {
+        return properties.timeZone();
+    }
+
+    /** Racha vigente y si ya se entrenó hoy: alcanza para decidir un recordatorio sin armar todo el resumen. */
+    public record StreakStatus(int streak, boolean trainedToday) {
+    }
+
+    @Transactional(readOnly = true)
+    public StreakStatus streakStatus(UUID userId) {
+        ZoneId zone = properties.timeZone();
+        LocalDate today = LocalDate.now(clock.withZone(zone));
+        List<LocalDate> days = queries.activeDays(userId, zone, today.minusDays(365));
+        return new StreakStatus(Streaks.current(days, today), days.contains(today));
+    }
+
     /**
      * Evolución por categoría, agrupada por semana o mes. Sin {@code to}, hasta hoy; sin {@code from},
      * las últimas 12 semanas o 6 meses.

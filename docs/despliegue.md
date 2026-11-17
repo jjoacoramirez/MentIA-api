@@ -67,6 +67,22 @@ Para activarla, cargar en Railway `MENTIA_AI_ENABLED=true`, `MENTIA_AI_PROVIDER`
 - **Key:** usar una exclusiva de producción.
 - **Topes de gasto:** están en `mentia.ai.limits` (US$2 por día y US$20 por mes). Conviene configurar también un límite de gasto en el panel del proveedor.
 
+## 5. Recordatorios de racha (opcional)
+
+Los avisos llegan aunque la app esté cerrada. Se activan en Railway con estas variables:
+
+| Variable | Valor |
+|---|---|
+| `MENTIA_PUSH_ENABLED` | `true` |
+| `MENTIA_PUSH_PUBLIC_KEY` | clave pública VAPID |
+| `MENTIA_PUSH_PRIVATE_KEY` | clave privada VAPID. Secreta: no se commitea ni se comparte. |
+| `MENTIA_PUSH_SUBJECT` | URL https del front, por ejemplo `https://tu-app.vercel.app` |
+
+- **Claves:** se generan una sola vez con `npx web-push generate-vapid-keys`. Si se cambian, las suscripciones existentes dejan de funcionar y cada persona tiene que volver a activar los avisos.
+- **Si falta una clave:** con `MENTIA_PUSH_ENABLED=true` y una clave vacía o mal cargada, la API no arranca y el error dice cuál es. Con `false` (o sin la variable) la API funciona igual y el front oculta la opción.
+- **Horario:** un aviso por día a las 19:00 de Buenos Aires (`mentia.notification.reminder-cron`) a quien tiene racha y todavía no entrenó hoy.
+- **iPhone:** Safari solo permite avisos si la app se agrega a la pantalla de inicio. En el resto de los navegadores alcanza con dar el permiso.
+
 ## Notas
 
 - **Costo:** la API usa unos 300 MB de RAM en reposo y Railway cobra por uso. Conviene revisar el consumo en **Usage** la primera semana.

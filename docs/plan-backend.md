@@ -251,6 +251,15 @@ Cada ola se puede paralelizar internamente. No arrancar una ola sin cerrar las a
 - No hay endpoint de eventos para el cliente (ver ajuste 3).
 - Panel admin (agregado después): `GET /api/v1/admin/metrics/consistency`, solo ADMIN. Agrupa a los usuarios por constancia (días con al menos una sesión de entrenamiento completada, en `mentia.metrics.time-zone`; cortes en `mentia.metrics.consistency-groups`) y devuelve por grupo: usuarios, sesiones completadas y abandonadas, precisión de la primera y la última sesión (usuarios con 2 o más) y cambio de nivel por área desde la primera sesión. Solo agregados: no expone alias, UUID ni datos de un usuario, y no se muestra a usuarios comunes (regla 5). Excluye las cuentas ADMIN salvo `include-admins: true`. Con grupos chicos los promedios son poco representativos.
 
+### NOTIF-01 Recordatorios de racha por push
+**Alcance.** Para que vuelvan a entrenar sin guardar email ni teléfono (regla 1), el aviso va por **web push**: el navegador entrega una URL de suscripción y el servidor la usa para mandar un aviso.
+- **Datos.** Tabla `push_subscriptions` (`user_id`, `endpoint`, `last_reminded_on`). Solo se guarda la URL de suscripción: el aviso va **sin contenido**, así que no se guardan claves de cifrado. El texto lo pone el service worker del front. La URL identifica un dispositivo: no se loguea ni sale en ninguna respuesta.
+- **Endpoints** (en `openapi.yaml`): `GET /notifications/push-config` (si está habilitado y la clave pública VAPID), `PUT` y `DELETE /notifications/push-subscription`. Con el servidor sin claves, `PUT` responde 503 `PUSH_DISABLED`. Hasta `max-subscriptions-per-user` por usuario; al pasarse se descartan las más viejas. Un mismo navegador que cambia de cuenta pasa a la última que lo registró.
+- **Seguridad.** El servidor hace un POST a la URL que manda el cliente, así que solo se aceptan URLs `https` de los servicios de push conocidos (`allowed-host-suffixes`), sin credenciales ni puertos raros, y el POST no sigue redirecciones. La identidad ante el servicio de push es VAPID (JWT ES256, RFC 8292). La clave privada viene de `MENTIA_PUSH_PRIVATE_KEY`: no se commitea, no se loguea ni entra en un `toString`.
+- **Regla del aviso.** Un job diario (`mentia.notification.reminder-cron`, en `mentia.progress.time-zone`) avisa a quien tiene una racha de al menos `min-streak` días y **todavía no entrenó hoy**. Como mucho un aviso por suscripción por día. Si el servicio de push responde 404/410 se borra la suscripción; ante otra falla se reintenta en la próxima corrida. No es una decisión del motor: la IA no interviene.
+- **Configuración.** `mentia.notification.*` en `application.yml`: `enabled` (apagado por defecto), `vapid-public-key`, `vapid-private-key`, `subject`, `reminder-cron`, `min-streak`, `max-subscriptions-per-user`, `ttl`, timeouts y `allowed-host-suffixes`. Prendido con una clave mal cargada, la API no arranca.
+- **Límites.** El usuario elige activarlo en su navegador y puede apagarlo cuando quiera. Los avisos no comparan al usuario con otros (regla 5).
+
 ### BACK-15, 16, 17 Post-MVP
 - No implementar. Solo se mantiene el paquete `episodic/` vacío.
 

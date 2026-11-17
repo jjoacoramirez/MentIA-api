@@ -50,6 +50,29 @@ mentia:
     time-zone: ${mentia.progress.time-zone}
     consistency-groups: [1, 2, 4, 8]   # 1 día, 2 a 3, 4 a 7 y 8 o más (más el grupo sin sesiones)
     include-admins: false              # las cuentas admin son de prueba
+  notification:
+    # Recordatorios de racha por web push. Apagado por defecto: sin claves la API funciona igual.
+    # Claves VAPID: `npx web-push generate-vapid-keys`. La privada nunca va acá ni se commitea.
+    enabled: ${MENTIA_PUSH_ENABLED:false}
+    vapid-public-key: ${MENTIA_PUSH_PUBLIC_KEY:}
+    vapid-private-key: ${MENTIA_PUSH_PRIVATE_KEY:}
+    # URL https del front (o mailto:) con la que esta API se identifica ante el servicio de push.
+    subject: ${MENTIA_PUSH_SUBJECT:}
+    # Se evalúa en mentia.progress.time-zone. Un aviso por suscripción por día como máximo.
+    reminder-cron: "0 0 19 * * *"
+    # Racha mínima (en días) para recibir el aviso.
+    min-streak: 1
+    max-subscriptions-per-user: 5
+    # Cuánto guarda el servicio de push un aviso si el dispositivo está apagado.
+    ttl: 6h
+    connect-timeout: 3s
+    read-timeout: 10s
+    # La API solo le pega a estos servicios de push (Chrome/Edge/Android, Firefox, Safari y Windows).
+    allowed-host-suffixes:
+      - fcm.googleapis.com
+      - updates.push.services.mozilla.com
+      - push.apple.com
+      - notify.windows.com
   gamification:
     # XP por sesión completada = xp-per-session + xp-per-item × ítems + bonus (si precisión >= accuracy-bonus-threshold).
     xp-per-session: 10
