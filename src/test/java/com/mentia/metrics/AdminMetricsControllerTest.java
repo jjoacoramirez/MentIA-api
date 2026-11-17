@@ -33,7 +33,9 @@ class AdminMetricsControllerTest extends WebLayerTest {
     void adminCanLoadReportAndInvalidFiltersAreRejected() throws Exception {
         var date = LocalDate.of(2026, 11, 4);
         given(service.report(7, "ATENCION", "")).willReturn(
-                new AdminMetricsService.Report(date.minusDays(6), date, 0, List.of(), List.of(), List.of(), List.of()));
+                new AdminMetricsService.Report(date.minusDays(6), date, 0, List.of(), List.of(), List.of(), List.of(),
+                        new AdminMetricsService.Overview(0, 0, 0, 0, 0, null), List.of(), List.of(), List.of(),
+                        List.of(), new AdminMetricsService.Retention(0, 0, 0, 0)));
         mvc.perform(get("/api/v1/admin/metrics").param("days", "7").param("category", "ATENCION")
                 .with(authenticatedAs(UUID.randomUUID(), Role.ADMIN)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.participants").value(0)).andExpect(matchesContract());

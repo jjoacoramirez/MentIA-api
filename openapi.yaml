@@ -716,7 +716,8 @@ components:
   schemas:
     AdminMetricsReport:
       type: object
-      required: [from, to, participants, activity, cohorts, exercises, options]
+      required: [from, to, participants, activity, cohorts, exercises, options, overview, signups, hours,
+        ageRanges, levels, retention]
       properties:
         from: {type: string, format: date}
         to: {type: string, format: date}
@@ -747,12 +748,14 @@ components:
           type: array
           items:
             type: object
-            required: [code, name, category, attempts, accuracy, medianMs]
+            required: [code, name, category, attempts, players, avgLevel, accuracy, medianMs]
             properties:
               code: {type: string}
               name: {type: string}
               category: {type: string}
               attempts: {type: integer, format: int64}
+              players: {type: integer, format: int64, description: Personas distintas que lo jugaron en el período}
+              avgLevel: {type: number, description: Nivel medio de dificultad de los intentos}
               accuracy: {type: number}
               medianMs: {type: number}
         options:
@@ -765,6 +768,73 @@ components:
               name: {type: string}
               category: {type: string}
               categoryName: {type: string}
+        overview:
+          type: object
+          description: |
+            Totales de cuentas. Solo `newUsers` depende del período. Las cuentas ADMIN no cuentan salvo
+            `mentia.metrics.include-admins`.
+          required: [registered, newUsers, assessed, trained, reminderUsers, medianSessionSeconds]
+          properties:
+            registered: {type: integer, format: int64}
+            newUsers: {type: integer, format: int64}
+            assessed: {type: integer, format: int64, description: Con la evaluación inicial hecha}
+            trained: {type: integer, format: int64, description: Con al menos un entrenamiento completado}
+            reminderUsers: {type: integer, format: int64, description: Con el recordatorio de racha activado}
+            medianSessionSeconds:
+              type: number
+              nullable: true
+              description: Mediana de duración de un entrenamiento completado en el período
+        signups:
+          type: array
+          description: Altas por día (hora de Buenos Aires). Los días sin altas no vienen.
+          items:
+            type: object
+            required: [day, users]
+            properties:
+              day: {type: string, format: date}
+              users: {type: integer, format: int64}
+        hours:
+          type: array
+          description: Entrenamientos iniciados por hora del día (0 a 23, hora de Buenos Aires). Las horas sin actividad no vienen.
+          items:
+            type: object
+            required: [hour, started, completed]
+            properties:
+              hour: {type: integer, minimum: 0, maximum: 23}
+              started: {type: integer, format: int64}
+              completed: {type: integer, format: int64}
+        ageRanges:
+          type: array
+          description: Cuentas por rango etario y cuántas estuvieron activas en el período. Solo agregados.
+          items:
+            type: object
+            required: [ageRange, users, active]
+            properties:
+              ageRange: {type: string, enum: ['18-24', '25-30', '31-40', '41+']}
+              users: {type: integer, format: int64}
+              active: {type: integer, format: int64}
+        levels:
+          type: array
+          description: Cuántas personas están hoy en cada nivel de cada categoría (respeta el filtro de categoría).
+          items:
+            type: object
+            required: [category, level, users]
+            properties:
+              category: {type: string}
+              level: {type: integer}
+              users: {type: integer, format: int64}
+        retention:
+          type: object
+          description: |
+            De quienes completaron su primer entrenamiento dentro del período, cuántos volvieron al día siguiente (d1)
+            y dentro de los 7 días (d7). Solo cuenta a quien ya tuvo tiempo de volver. Ignora los filtros de categoría y
+            ejercicio.
+          required: [d1Eligible, d1Returned, d7Eligible, d7Returned]
+          properties:
+            d1Eligible: {type: integer, format: int64}
+            d1Returned: {type: integer, format: int64}
+            d7Eligible: {type: integer, format: int64}
+            d7Returned: {type: integer, format: int64}
     PushConfig:
       type: object
       required: [enabled, publicKey]
