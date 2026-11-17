@@ -16,5 +16,6 @@ public enum ErrorCode {
     ITEM_NOT_IN_SESSION,
     ATTEMPT_CONFLICT,
     PUSH_DISABLED,
+    USER_NOT_FOUND,
     INTERNAL_ERROR
 }

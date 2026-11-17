@@ -90,6 +90,12 @@ public class AuthService {
         return TokenResponse.bearer(token.token(), token.expiresInSeconds(), role);
     }
 
+    /** Para herramientas de admin que eligen a una cuenta por su alias. Devuelve solo el id interno. */
+    @Transactional(readOnly = true)
+    public Optional<UUID> findUserId(String username) {
+        return userRepository.findByUsername(normalizeUsername(username.trim())).map(User::getId);
+    }
+
     public void logout(AuthenticatedUser user) {
         revocationService.revoke(user.jti(), user.expiresAt());
     }
