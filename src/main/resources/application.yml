@@ -124,6 +124,20 @@ mentia:
       failure-threshold: 5          # fallas transitorias seguidas para abrirlo
       open-duration: 60s
       half-open-calls: 1
+  catalog:
+    generation:
+      # Contenido por lotes con IA (solo lo dispara un admin). Cada variante es una llamada y cuenta en el presupuesto
+      # global de mentia.ai.limits. Lo generado se valida de forma estricta y queda marcado como source=AI.
+      max-variants-per-request: 5
+      max-tokens: 700
+      # false = lo generado queda inactivo hasta que alguien lo revise.
+      activate-generated: true
+  feedback:
+    # Comentario de cierre de sesión (solo lo dispara quien terminó la sesión; cuenta en su cuota de IA).
+    max-tokens: 200
+    max-chars: 450
+    # Si el texto de la IA contiene alguno (sin importar mayúsculas ni tildes), se descarta y va el texto básico.
+    forbidden-terms: [diagnostic, capacidad, cognitiv, defici, enfermedad, terapia, tratamiento, trastorno, medic, clinic]
   session:
     # Una sesión GENERATED o IN_PROGRESS más vieja que esto se abandona al pedir una nueva.
     stale-after: 12h

@@ -254,6 +254,45 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /admin/content/generate:
+    post:
+      tags: [Admin]
+      operationId: generateContent
+      summary: Genera variantes de contenido nuevas con IA (solo ADMIN)
+      description: |
+        Pide a la IA `count` variantes nuevas por cada ejercicio activo del tipo indicado (reconocimiento visual,
+        secuencia inversa o N-back). Cada respuesta se valida de forma estricta (cantidad, elementos distintos, sin
+        rostros ni personas, sin repetir temas ni elementos de variantes existentes) y se descarta entera si no
+        cumple. Lo que pasa se guarda en `exercise_variants` con `source = AI`; queda activo según
+        `mentia.catalog.generation.activate-generated`. Cuenta en el presupuesto global de IA. Si la IA no está
+        disponible desde el primer intento responde 503 `AI_UNAVAILABLE`; si se corta a la mitad, 200 con
+        `stoppedReason`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateContentRequest'
+      responses:
+        '200':
+          description: Resultado del lote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateContentResult'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: La IA no está disponible (`AI_UNAVAILABLE`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
   /admin/notifications/test:
     post:
       tags: [Admin]
@@ -493,6 +532,33 @@ paths:
       responses:
         '204':
           description: Sesion marcada como abandonada
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /sessions/{sessionId}/feedback:
+    post:
+      tags: [Sesiones]
+      operationId: getSessionFeedback
+      summary: Comentario de cierre de una sesión completada (IA-01)
+      description: |
+        Devuelve un comentario breve y cálido sobre cómo le fue a la persona. La primera vez lo genera (con IA si está
+        habilitada y hay cuota; si no, con un texto básico armado con los mismos datos) y lo guarda: las siguientes
+        veces devuelve el guardado sin volver a llamar a la IA. Al proveedor de IA solo viajan números del resultado y
+        nombres de áreas, nunca ids ni datos de la persona. `source` indica si lo escribió la IA (`AI`) o el texto
+        básico (`BASIC`). Solo para sesiones propias y completadas.
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Comentario de la sesión
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionFeedback'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -882,6 +948,49 @@ components:
           type: string
           nullable: true
           description: Clave pública VAPID en base64url. Null si los recordatorios están apagados.
+    SessionFeedback:
+      type: object
+      required: [text, source]
+      properties:
+        text: {type: string, maxLength: 600}
+        source:
+          type: string
+          enum: [AI, BASIC]
+          description: AI si lo escribió la IA; BASIC si es el texto de respaldo.
+    GenerateContentRequest:
+      type: object
+      required: [exerciseType, count]
+      additionalProperties: false
+      properties:
+        exerciseType:
+          type: string
+          enum: [VISUAL_RECOGNITION, REVERSE_SEQUENCE, N_BACK]
+        count:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Variantes nuevas por ejercicio (el tope real es `mentia.catalog.generation.max-variants-per-request`).
+    GenerateContentResult:
+      type: object
+      required: [requested, created, rejected, stoppedReason]
+      properties:
+        requested: {type: integer, description: Variantes pedidas en total (por todos los ejercicios del tipo)}
+        created:
+          type: array
+          items:
+            type: object
+            required: [exerciseCode, variantKey, theme, active]
+            properties:
+              exerciseCode: {type: string}
+              variantKey: {type: string}
+              theme: {type: string}
+              active: {type: boolean}
+        rejected: {type: integer, description: Variantes que la IA devolvió y la validación descartó}
+        stoppedReason:
+          type: string
+          nullable: true
+          enum: [LIMIT_EXCEEDED, CIRCUIT_OPEN, PROVIDER_ERROR, DISABLED]
+          description: Por qué se cortó a la mitad; null si se completó el lote.
     TestPushRequest:
       type: object
       required: [username]

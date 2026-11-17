@@ -17,5 +17,6 @@ public enum ErrorCode {
     ATTEMPT_CONFLICT,
     PUSH_DISABLED,
     USER_NOT_FOUND,
+    AI_UNAVAILABLE,
     INTERNAL_ERROR
 }

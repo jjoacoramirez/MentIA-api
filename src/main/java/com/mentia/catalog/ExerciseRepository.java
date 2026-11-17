@@ -9,10 +9,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.mentia.catalog.domain.Exercise;
+import com.mentia.catalog.domain.ExerciseType;
 
 public interface ExerciseRepository extends JpaRepository<Exercise, UUID> {
 
     Optional<Exercise> findByCode(String code);
+
+    List<Exercise> findByTypeAndActiveTrue(ExerciseType type);
 
     /** Un ejercicio solo cuenta como activo si su categoría también lo está. */
     @Query("""

@@ -10,4 +10,7 @@ import com.mentia.catalog.domain.ExerciseVariant;
 public interface ExerciseVariantRepository extends JpaRepository<ExerciseVariant, UUID> {
 
     List<ExerciseVariant> findByExerciseIdAndActiveTrueOrderByVariantKey(UUID exerciseId);
+
+    /** Todas, activas o no: para no repetir temas al generar contenido nuevo. */
+    List<ExerciseVariant> findByExerciseId(UUID exerciseId);
 }

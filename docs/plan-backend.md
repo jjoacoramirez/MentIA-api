@@ -302,6 +302,22 @@ Un límite en `0` actúa como interruptor: bloquea todo uso de ese tipo.
 
 **Fuera de alcance de esta etapa:** el ejercicio que usa palabras, el generador por lotes con su validación y biblioteca de respaldo, el feedback en lenguaje natural y un endpoint de administración para disparar lotes.
 
+### IA-02 Contenido por lotes y comentario de cierre
+Primeros usos de la capa de IA (IA-01). Ninguno decide dificultad, nivel ni qué ejercicios se asignan, ninguno se llama durante una sesión y los dos tienen respaldo.
+
+**a) Contenido por lotes.** `POST /api/v1/admin/content/generate` (solo ADMIN) pide a la IA variantes nuevas para reconocimiento visual, secuencia inversa o N-back y las guarda como filas de `exercise_variants` (regla 4: extensible por datos).
+- Cada llamada pide una sola variante. La respuesta se valida de forma estricta y se descarta entera si no cumple: tema de 1 a 4 palabras sin dígitos; cantidad exacta de elementos (24 en reconocimiento, 8 a 12 en secuencia inversa, 6 a 10 en N-back); elementos distintos y todos del mismo tipo (emojis, o consonantes mayúsculas, o figuras geométricas solo en N-back); sin rostros, personas, manos, banderas, tonos de piel ni emojis compuestos; sin repetir el tema ni parecerse (60% o más de elementos en común) a una variante existente. El filtro de emojis es de mejor esfuerzo: por eso lo generado queda con `source = AI` (migración V17) y se puede revisar o desactivar.
+- Al proveedor viaja solo el tipo de ejercicio y los temas que ya existen: nada de ids ni de usuarios. El costo es global (`mentia.ai.limits`), no de ninguna persona.
+- Configuración `mentia.catalog.generation.*`: `max-variants-per-request`, `max-tokens` y `activate-generated` (en `false` lo generado queda inactivo hasta revisarlo).
+- Sin IA disponible desde el primer intento responde 503 `AI_UNAVAILABLE`; si se corta a la mitad devuelve lo creado y `stoppedReason`.
+- Fuera de alcance: ejercicios de pares (ODD_ONE_OUT) y paletas de colores (STROOP), cuya calidad es más difícil de validar sin una persona; y un trabajo programado que genere solo.
+
+**b) Comentario de cierre de sesión.** `POST /api/v1/sessions/{id}/feedback` devuelve un texto breve y cálido sobre la sesión completada.
+- La primera vez se genera y se guarda en `session_feedback` (uno por sesión, migración V17); después se devuelve el guardado, así reabrir el resultado no vuelve a llamar a la IA ni gasta la cuota de la persona. Solo sesiones propias y completadas (404 / 409).
+- Al proveedor viajan solo números del resultado (actividades, precisión, cambio de nivel por área, cambio de precisión respecto de la sesión anterior) y nombres de áreas. Nada de ids, alias, fechas ni textos del usuario. No se loguean prompts ni respuestas.
+- Cuenta contra la cuota de la persona (`mentia.ai.limits.user-*`). Si la IA está apagada, sin cuota, en pausa o falla, o si el texto no pasa la validación, se usa un **texto básico** armado con los mismos datos: el comentario siempre existe. `source` (`AI` o `BASIC`) le dice al front si debe avisar que lo escribió la IA.
+- Validación del texto de la IA (`mentia.feedback.*`): mínimo de largo, tope `max-chars` (se corta en la última oración completa o se descarta), sin enlaces y sin ningún término de `forbidden-terms` (nada clínico, regla 2). El prompt pide voseo, 2 o 3 oraciones, hablar del desempeño dentro de MentIA, normalizar los errores y no comparar con otras personas (regla 5).
+
 ## 7. Reglas del motor (propuesta inicial, validar antes de BACK-10)
 
 Configuración en `application.yml`:

@@ -37,6 +37,7 @@ com.mentia
 ├── metrics/       # eventos y vistas de métricas del MVP    (BACK-21)
 ├── ai/            # cliente de IA, límites de costo, circuit breaker (IA-01)
 ├── notification/  # recordatorios de racha por web push (NOTIF-01)
+├── feedback/      # comentario de cierre de sesión con IA y texto de respaldo (IA-02)
 └── episodic/      # Post-MVP, no implementar todavía        (BACK-15, 16, 17)
 ```
 
