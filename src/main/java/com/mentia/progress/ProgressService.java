@@ -83,7 +83,7 @@ public class ProgressService {
     }
 
     /**
-     * Evolución por categoría, agrupada por semana o mes. Sin {@code to}, hasta hoy; sin {@code from},
+     * Evolución por categoría, agrupada por día, semana o mes. Sin {@code to}, hasta hoy; sin {@code from},
      * las últimas 12 semanas o 6 meses.
      */
     @Transactional(readOnly = true)
