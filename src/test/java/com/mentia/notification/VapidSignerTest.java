@@ -20,6 +20,9 @@ import java.util.Date;
 
 import org.junit.jupiter.api.Test;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 
@@ -45,6 +48,10 @@ class VapidSignerTest {
 
         assertThat(header).startsWith("vapid t=").endsWith(", k=" + PushTestKeys.PUBLIC);
         String jwt = header.substring("vapid t=".length(), header.indexOf(", k="));
+        // El parser de JJWT normaliza texto y listas al mismo Set: se comprueba el JSON original.
+        JsonNode payload = new ObjectMapper().readTree(Base64.getUrlDecoder().decode(jwt.split("\\.")[1]));
+        assertThat(payload.get("aud").isTextual()).isTrue();
+        assertThat(payload.get("aud").asText()).isEqualTo("https://fcm.googleapis.com");
         Claims claims = Jwts.parser().verifyWith(publicKey()).clock(() -> Date.from(CLOCK.instant()))
                 .build().parseSignedClaims(jwt).getPayload();
         assertThat(claims.getAudience()).containsExactly("https://fcm.googleapis.com");
