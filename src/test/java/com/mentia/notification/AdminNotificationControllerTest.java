@@ -58,6 +58,18 @@ class AdminNotificationControllerTest extends WebLayerTest {
     }
 
     @Test
+    void returnsFailureCodesForAdmins() throws Exception {
+        given(service.send("ana")).willReturn(new TestPushResponse(2, 0, 0, 2,
+                java.util.Map.of("FORBIDDEN", 2)));
+        mvc.perform(post(URL).with(authenticatedAs(UUID.randomUUID(), Role.ADMIN))
+                .contentType(MediaType.APPLICATION_JSON).content(body("ana")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.failed").value(2))
+                .andExpect(jsonPath("$.failures.FORBIDDEN").value(2))
+                .andExpect(jsonPath("$.endpoint").doesNotExist())
+                .andExpect(matchesContract());
+    }
+
+    @Test
     void unknownAliasAnd503AreReportedWithStableCodes() throws Exception {
         willThrow(new ApiException(HttpStatus.NOT_FOUND, ErrorCode.USER_NOT_FOUND, "No existe"))
                 .given(service).send("nadie");

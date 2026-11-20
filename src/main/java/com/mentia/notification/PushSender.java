@@ -9,7 +9,13 @@ interface PushSender {
         /** La suscripción ya no existe (404/410): hay que borrarla. */
         GONE,
         /** Falla transitoria o rechazo: se reintenta en la próxima corrida. */
-        FAILED
+        FAILED,
+        UNAUTHORIZED,
+        FORBIDDEN,
+        RATE_LIMITED,
+        PROVIDER_UNAVAILABLE,
+        REJECTED,
+        CONNECTION_FAILED
     }
 
     Result send(String endpoint);

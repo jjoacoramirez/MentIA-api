@@ -900,6 +900,11 @@ components:
         sent: {type: integer}
         removed: {type: integer, description: Suscripciones que ya no existían y se borraron}
         failed: {type: integer}
+        failures:
+          type: object
+          description: Cantidad por código de error (UNAUTHORIZED, FORBIDDEN, RATE_LIMITED, PROVIDER_UNAVAILABLE, REJECTED, CONNECTION_FAILED o FAILED). Solo para la prueba de administración.
+          additionalProperties:
+            type: integer
     PushSubscriptionRequest:
       type: object
       required: [endpoint]
