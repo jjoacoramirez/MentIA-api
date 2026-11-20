@@ -17,6 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import java.sql.Timestamp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.mentia.support.ApiClient;
@@ -28,6 +30,9 @@ class ProgressIntegrationTest extends IntegrationTest {
 
     @Autowired
     ApiClient api;
+
+    @Autowired
+    JdbcTemplate jdbc;
 
     ApiClient.User user;
 
@@ -92,6 +97,35 @@ class ProgressIntegrationTest extends IntegrationTest {
         api.perform(user, get("/api/v1/progress/categories").param("from", "2026-12-01").param("to", "2026-11-01"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("from"));
+    }
+
+    @Test
+    void laEvolucionDiariaSeparaAyerYHoyEnLaZonaArgentina() throws Exception {
+        LocalDate today = LocalDate.now(AR);
+        Timestamp earlyToday = Timestamp.from(today.atTime(0, 30).atZone(AR).toInstant());
+        Timestamp lateYesterday = Timestamp.from(today.minusDays(1).atTime(23, 30).atZone(AR).toInstant());
+        jdbc.update("UPDATE attempts SET created_at = ? WHERE user_id = ?", earlyToday, user.id());
+        jdbc.update("""
+                UPDATE attempts SET created_at = ? WHERE session_id = (
+                    SELECT id FROM training_sessions WHERE user_id = ? AND status = 'COMPLETED'
+                    ORDER BY finished_at ASC LIMIT 1)
+                """, lateYesterday, user.id());
+
+        JsonNode categories = api.json(api.perform(user, get("/api/v1/progress/categories")
+                        .param("granularity", "day").param("from", today.minusDays(1).toString())
+                        .param("to", today.toString()))
+                .andExpect(status().isOk()).andExpect(matchesContract()));
+        assertThat(categories).hasSize(3);
+        for (JsonNode category : categories) {
+            JsonNode points = category.get("points");
+            assertThat(points).hasSize(2);
+            assertThat(points.get(0).get("periodStart").asText()).isEqualTo(today.minusDays(1).toString());
+            assertThat(points.get(1).get("periodStart").asText()).isEqualTo(today.toString());
+            assertThat(points.get(0).get("accuracy").asDouble()).isEqualTo(0.6);
+            assertThat(points.get(1).get("accuracy").asDouble()).isEqualTo(1.0);
+            assertThat(points.get(0).get("sessions").asInt()).isEqualTo(1);
+            assertThat(points.get(1).get("sessions").asInt()).isEqualTo(1);
+        }
     }
 
     private void completeSession(double accuracy) throws Exception {

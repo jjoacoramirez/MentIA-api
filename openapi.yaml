@@ -541,12 +541,13 @@ paths:
       tags: [Progreso]
       operationId: getCategoryProgress
       summary: Evolucion por categoria en el tiempo (BACK-14)
+      description: Promedios de precisión y dificultad de los intentos de sesiones completadas, agrupados por día, semana o mes en la zona horaria de actividad. Los períodos sin actividad se omiten.
       parameters:
         - name: granularity
           in: query
           schema:
             type: string
-            enum: [week, month]
+            enum: [day, week, month]
             default: week
         - name: from
           in: query

@@ -53,6 +53,21 @@ class ProgressControllerTest extends WebLayerTest {
                 .andExpect(matchesContract());
     }
 
+    @Test
+    void evolucionDiariaMantieneLosDiasSeparados() throws Exception {
+        given(progressService.categories(eq(USER), eq("day"), any(), any())).willReturn(List.of(
+                new CategoryProgress("ATENCION", List.of(
+                        new CategoryProgress.Point(LocalDate.of(2026, 11, 19), 0.7, 3.0, 2),
+                        new CategoryProgress.Point(LocalDate.of(2026, 11, 20), 0.9, 4.0, 1)))));
+
+        mockMvc.perform(get("/api/v1/progress/categories").param("granularity", "day")
+                        .param("from", "2026-11-16").param("to", "2026-11-20").with(authenticatedAs(USER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].points[0].periodStart").value("2026-11-19"))
+                .andExpect(jsonPath("$[0].points[1].periodStart").value("2026-11-20"))
+                .andExpect(matchesContract());
+    }
+
     @ParameterizedTest
     @CsvSource({
             "page, -1",
@@ -93,7 +108,7 @@ class ProgressControllerTest extends WebLayerTest {
 
     @ParameterizedTest
     @CsvSource({
-            "granularity, day",
+            "granularity, year",
             "from, 03-11-2026"})
     void parametrosInvalidosDevuelven400(String param, String value) throws Exception {
         mockMvc.perform(get("/api/v1/progress/categories").param(param, value).with(authenticatedAs(USER)))

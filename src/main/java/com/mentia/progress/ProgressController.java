@@ -44,7 +44,7 @@ public class ProgressController {
     @GetMapping("/api/v1/progress/categories")
     public List<CategoryProgress> categories(@AuthenticationPrincipal AuthenticatedUser user,
             @RequestParam(defaultValue = "week")
-            @Pattern(regexp = "week|month", message = "La granularidad es week o month") String granularity,
+            @Pattern(regexp = "day|week|month", message = "La granularidad es day, week o month") String granularity,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return progressService.categories(user.userId(), granularity, from, to);
