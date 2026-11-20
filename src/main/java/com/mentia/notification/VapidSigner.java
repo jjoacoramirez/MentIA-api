@@ -70,8 +70,9 @@ final class VapidSigner {
     String authorization(String endpoint) {
         URI uri = URI.create(endpoint);
         Instant now = Instant.now(clock);
+        // El proveedor de Web Push espera aud como un único origen, serializado como texto.
         String jwt = Jwts.builder()
-                .audience().add(uri.getScheme() + "://" + uri.getHost()).and()
+                .audience().single(uri.getScheme() + "://" + uri.getHost())
                 .subject(subject)
                 .expiration(java.util.Date.from(now.plusSeconds(12 * 3600L)))
                 .signWith(privateKey, Jwts.SIG.ES256)
