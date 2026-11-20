@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
@@ -49,7 +50,15 @@ final class WebPushSender implements PushSender {
                 return Result.GONE;
             }
             log.warn("Push rechazado por el servicio, status={}", status);
-            return Result.FAILED;
+            return switch (status) {
+                case 401 -> Result.UNAUTHORIZED;
+                case 403 -> Result.FORBIDDEN;
+                case 429 -> Result.RATE_LIMITED;
+                default -> status >= 500 ? Result.PROVIDER_UNAVAILABLE : Result.REJECTED;
+            };
+        } catch (ResourceAccessException e) {
+            log.warn("No se pudo contactar al servicio de push: {}", e.getClass().getSimpleName());
+            return Result.CONNECTION_FAILED;
         } catch (RuntimeException e) {
             log.warn("No se pudo contactar al servicio de push: {}", e.getClass().getSimpleName());
             return Result.FAILED;

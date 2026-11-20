@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -63,8 +64,22 @@ class PushTestServiceTest {
         given(sender.send(gone.endpoint())).willReturn(PushSender.Result.GONE);
         given(sender.send(PushTestKeys.ENDPOINT + "down")).willReturn(PushSender.Result.FAILED);
 
-        assertThat(service(true).send("ana")).isEqualTo(new TestPushResponse(2, 0, 1, 1));
+        assertThat(service(true).send("ana")).isEqualTo(new TestPushResponse(2, 0, 1, 1, Map.of("FAILED", 1)));
         verify(notifications).remove(gone.subscriptionId());
+    }
+
+    @Test
+    void reportsFailureReasonsWithoutSubscriptionUrls() {
+        given(auth.findUserId("ana")).willReturn(Optional.of(user));
+        given(notifications.devicesOf(user)).willReturn(List.of(device("1"), device("2"), device("3")));
+        given(sender.send(any())).willReturn(PushSender.Result.FORBIDDEN, PushSender.Result.FORBIDDEN,
+                PushSender.Result.CONNECTION_FAILED);
+
+        TestPushResponse result = service(true).send("ana");
+        assertThat(result.failed()).isEqualTo(3);
+        assertThat(result.failures()).containsExactlyInAnyOrderEntriesOf(Map.of("FORBIDDEN", 2, "CONNECTION_FAILED", 1));
+        verify(notifications, never()).remove(any());
+        verify(notifications, never()).markReminded(any(), any());
     }
 
     @Test

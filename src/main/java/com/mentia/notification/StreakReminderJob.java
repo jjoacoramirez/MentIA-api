@@ -59,7 +59,7 @@ public class StreakReminderJob {
                     sent++;
                 }
                 case GONE -> notifications.remove(due.subscriptionId());
-                case FAILED -> { }
+                case FAILED, UNAUTHORIZED, FORBIDDEN, RATE_LIMITED, PROVIDER_UNAVAILABLE, REJECTED, CONNECTION_FAILED -> { }
             }
         }
         log.info("Recordatorios de racha enviados: {}", sent);

@@ -13,6 +13,8 @@ import java.util.List;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -56,11 +58,27 @@ class WebPushSenderTest {
     @Test
     void otherFailuresAreRetriedLater() {
         server.expect(requestTo(PushTestKeys.ENDPOINT)).andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
-        assertThat(sender.send(PushTestKeys.ENDPOINT)).isEqualTo(PushSender.Result.FAILED);
+        assertThat(sender.send(PushTestKeys.ENDPOINT)).isEqualTo(PushSender.Result.PROVIDER_UNAVAILABLE);
 
         server.reset();
         server.expect(requestTo(PushTestKeys.ENDPOINT)).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
-        assertThat(sender.send(PushTestKeys.ENDPOINT)).isEqualTo(PushSender.Result.FAILED);
+        assertThat(sender.send(PushTestKeys.ENDPOINT)).isEqualTo(PushSender.Result.RATE_LIMITED);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"401, UNAUTHORIZED", "403, FORBIDDEN", "400, REJECTED", "503, PROVIDER_UNAVAILABLE"})
+    void identifiesProviderRejections(int status, PushSender.Result result) {
+        server.expect(requestTo(PushTestKeys.ENDPOINT)).andRespond(withStatus(HttpStatus.valueOf(status)));
+        assertThat(sender.send(PushTestKeys.ENDPOINT)).isEqualTo(result);
+        server.verify();
+    }
+
+    @Test
+    void identifiesConnectionFailures() {
+        server.expect(requestTo(PushTestKeys.ENDPOINT)).andRespond(
+                org.springframework.test.web.client.response.MockRestResponseCreators.withException(new java.net.SocketTimeoutException()));
+        assertThat(sender.send(PushTestKeys.ENDPOINT)).isEqualTo(PushSender.Result.CONNECTION_FAILED);
+        server.verify();
     }
 
     @Test

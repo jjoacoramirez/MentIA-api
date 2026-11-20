@@ -1,6 +1,8 @@
 package com.mentia.notification;
 
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -47,18 +49,23 @@ public class PushTestService {
         int sent = 0;
         int removed = 0;
         int failed = 0;
+        Map<String, Integer> failures = new LinkedHashMap<>();
         for (NotificationService.Device device : devices) {
-            switch (sender.send(device.endpoint())) {
+            PushSender.Result result = sender.send(device.endpoint());
+            switch (result) {
                 case SENT -> sent++;
                 case GONE -> {
                     notifications.remove(device.subscriptionId());
                     removed++;
                 }
-                case FAILED -> failed++;
+                case FAILED, UNAUTHORIZED, FORBIDDEN, RATE_LIMITED, PROVIDER_UNAVAILABLE, REJECTED, CONNECTION_FAILED -> {
+                    failed++;
+                    failures.merge(result.name(), 1, Integer::sum);
+                }
             }
         }
         log.info("Aviso de prueba: dispositivos={} enviados={} eliminados={} fallidos={}", devices.size(), sent,
                 removed, failed);
-        return new TestPushResponse(devices.size(), sent, removed, failed);
+        return new TestPushResponse(devices.size(), sent, removed, failed, failures);
     }
 }
