@@ -184,6 +184,32 @@ class AuthServiceTest {
         throw new AssertionError("Se esperaba ApiException");
     }
 
+    @Test
+    void renovarMantieneUsuarioYVersionRotaElTokenYRevocaElAnterior() {
+        User user = withId(new User("lector", "hash", "recovery-hash", NOW), UUID.randomUUID());
+        given(userRepository.findById(user.getId())).willReturn(Optional.of(user));
+        AuthenticatedUser previous = new AuthenticatedUser(user.getId(), "anterior", NOW.minusSeconds(3600),
+                NOW.plusSeconds(3600), 3, Role.USER);
+
+        TokenResponse response = authService.refresh(previous);
+
+        AuthenticatedUser renewed = jwtService.parse(response.accessToken()).orElseThrow();
+        assertThat(renewed.userId()).isEqualTo(user.getId());
+        assertThat(renewed.tokenVersion()).isEqualTo(3);
+        assertThat(renewed.jti()).isNotEqualTo("anterior");
+        assertThat(renewed.expiresAt()).isEqualTo(NOW.plus(Duration.ofHours(24)));
+        verify(revocationService).revoke(previous.jti(), previous.expiresAt());
+    }
+
+    @Test
+    void renovarNoAceptaUnaSesionRevocada() {
+        AuthenticatedUser previous = new AuthenticatedUser(UUID.randomUUID(), "revocado", NOW,
+                NOW.plusSeconds(3600), 0, Role.USER);
+        given(revocationService.isRevoked(previous)).willReturn(true);
+        assertThatThrownBy(() -> authService.refresh(previous)).isInstanceOf(ApiException.class);
+        verify(revocationService, never()).revoke(any(), any());
+    }
+
     private User existingUser(String username) {
         User user = withId(new User(username, passwordEncoder.encode(PASSWORD), "hash-del-codigo", NOW),
                 UUID.randomUUID());

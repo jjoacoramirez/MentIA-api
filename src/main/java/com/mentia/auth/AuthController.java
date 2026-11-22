@@ -46,6 +46,11 @@ public class AuthController {
         authService.logout(user);
     }
 
+    @PostMapping("/refresh")
+    public TokenResponse refresh(@AuthenticationPrincipal AuthenticatedUser user) {
+        return authService.refresh(user);
+    }
+
     @PostMapping("/recovery/reset")
     public RecoveryCodeResponse resetPassword(@Valid @RequestBody RecoveryResetRequest request) {
         return recoveryService.reset(request);

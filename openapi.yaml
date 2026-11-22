@@ -80,6 +80,22 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshSession
+      summary: Renovar una sesion vigente sin volver a ingresar la contrasena
+      description: Requiere un Bearer vigente y no revocado. Emite un token nuevo y revoca el anterior. No modifica suscripciones de notificaciones.
+      responses:
+        '200':
+          description: Sesion renovada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /auth/logout:
     post:
       tags: [Auth]
@@ -1006,7 +1022,7 @@ components:
         expiresIn:
           type: integer
           description: Segundos hasta el vencimiento
-          example: 86400
+          example: 2592000
         role:
           type: string
           enum: [USER, ADMIN]

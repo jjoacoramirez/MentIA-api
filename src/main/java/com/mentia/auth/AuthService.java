@@ -100,6 +100,20 @@ public class AuthService {
         revocationService.revoke(user.jti(), user.expiresAt());
     }
 
+    /** Renueva solo una sesión vigente. Conserva su versión y revoca el token anterior. */
+    @Transactional
+    public TokenResponse refresh(AuthenticatedUser principal) {
+        if (revocationService.isRevoked(principal)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHORIZED, "La sesión ya no está vigente.");
+        }
+        User user = userRepository.findById(principal.userId()).orElseThrow(() ->
+                new ApiException(HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHORIZED, "La sesión ya no está vigente."));
+        // No elevar a la versión actual: un reset concurrente debe invalidar también este token nuevo.
+        JwtService.IssuedToken token = jwtService.issue(user.getId(), principal.tokenVersion(), user.getRole());
+        revocationService.revoke(principal.jti(), principal.expiresAt());
+        return TokenResponse.bearer(token.token(), token.expiresInSeconds(), user.getRole());
+    }
+
     private static ApiException usernameTaken() {
         return new ApiException(HttpStatus.CONFLICT, ErrorCode.USERNAME_TAKEN, USERNAME_TAKEN_DETAIL);
     }

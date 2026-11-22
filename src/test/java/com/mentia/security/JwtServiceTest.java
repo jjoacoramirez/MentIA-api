@@ -58,6 +58,16 @@ class JwtServiceTest {
     }
 
     @Test
+    void unaSesionPersistenteDuraTreintaDiasYSeRechazaAlVencer() {
+        JwtService persistent = new JwtService(new SecurityProperties(SECRET, Duration.ofDays(30)),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+        JwtService.IssuedToken token = persistent.issue(UUID.randomUUID(), 0, Role.USER);
+        assertThat(token.expiresInSeconds()).isEqualTo(Duration.ofDays(30).toSeconds());
+        assertThat(jwtAt(NOW.plus(Duration.ofDays(2)), SECRET).parse(token.token())).isPresent();
+        assertThat(jwtAt(NOW.plus(Duration.ofDays(31)), SECRET).parse(token.token())).isEmpty();
+    }
+
+    @Test
     void unTokenFirmadoConOtroSecretoSeRechaza() {
         String token = jwtAt(NOW, "otro-secreto-de-prueba-con-mas-de-32-bytes").issue(UUID.randomUUID(), 0, Role.USER).token();
         assertThat(service.parse(token)).isEmpty();
