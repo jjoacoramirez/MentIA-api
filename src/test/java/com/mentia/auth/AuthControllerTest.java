@@ -271,6 +271,20 @@ class AuthControllerTest extends WebLayerTest {
         return mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
+    @Test
+    void renovarRequiereSesionYRespetaElContrato() throws Exception {
+        UUID userId = UUID.randomUUID();
+        given(authService.refresh(any())).willReturn(TokenResponse.bearer("nuevo.jwt.firmado", 2592000, Role.USER));
+        mockMvc.perform(post("/api/v1/auth/refresh").with(authenticatedAs(userId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("nuevo.jwt.firmado"))
+                .andExpect(jsonPath("$.expiresIn").value(2592000))
+                .andExpect(matchesContract());
+        verify(authService).refresh(argThat((AuthenticatedUser u) -> u.userId().equals(userId)));
+        mockMvc.perform(post("/api/v1/auth/refresh"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private void expectValidationError(String body, String field) throws Exception {
         register(body)
                 .andExpect(status().isBadRequest())

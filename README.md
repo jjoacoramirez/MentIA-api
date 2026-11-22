@@ -18,6 +18,7 @@ Copiar `.env.example` a `.env` y completar. `docker compose` lee `.env` solo; pa
 | `MENTIA_DB_NAME` | Nombre de la base (docker compose) | `mentia` |
 | `MENTIA_DB_URL` | URL JDBC | `jdbc:postgresql://localhost:5432/mentia` |
 | `MENTIA_JWT_SECRET` | Secreto HS256 del JWT (mínimo 32 caracteres) | obligatoria |
+| `MENTIA_JWT_TTL` | Vigencia de cada token; el front renueva sesiones vigentes al usar la app | `30d` |
 | `MENTIA_AI_ENABLED` | Activa la capa de IA | `false` |
 | `MENTIA_AI_PROVIDER` | `openai` o `anthropic` | `openai` |
 | `MENTIA_AI_API_KEY` | Key del proveedor elegido (OpenAI empieza con `sk-proj-` o `sk-`, Anthropic con `sk-ant-`). Solo la lee el backend | opcional (vacía = IA deshabilitada) |
@@ -59,4 +60,6 @@ Todo usuario se registra con rol `USER`. El rol `ADMIN` habilita herramientas de
 UPDATE users SET role = 'ADMIN' WHERE username = 'mi_usuario';
 ```
 
-El rol viaja en el JWT, así que el usuario tiene que volver a iniciar sesión para que el cambio tenga efecto. `POST /auth/login` devuelve el `role` para que el front muestre u oculte esas herramientas; los permisos igual los controla el servidor.
+El rol viaja en el JWT y se actualiza al iniciar sesión o renovar el acceso. `POST /auth/login` y `POST /auth/refresh` devuelven el `role` para que el front muestre u oculte esas herramientas; los permisos igual los controla el servidor.
+
+El acceso tiene 30 días de vigencia por defecto, configurable con `MENTIA_JWT_TTL`. El front conserva la sesión en el dispositivo y la renueva mientras se usa la app. `POST /api/v1/auth/refresh` requiere un token vigente y no revocado, emite uno nuevo y revoca el anterior. Un token vencido requiere ingresar nuevamente. Las suscripciones de notificaciones no dependen de la vigencia del JWT; el cierre manual de sesión las desvincula desde el front.
