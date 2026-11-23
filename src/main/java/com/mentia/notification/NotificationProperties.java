@@ -23,7 +23,7 @@ public record NotificationProperties(
         String vapidPrivateKey,
         String subject,
         @NotBlank String reminderCron,
-        @Min(1) int minStreak,
+        @Min(0) int minStreak,
         @Min(1) int maxSubscriptionsPerUser,
         @NotNull Duration ttl,
         @NotNull Duration connectTimeout,

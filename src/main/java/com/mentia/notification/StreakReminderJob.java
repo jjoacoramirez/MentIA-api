@@ -14,7 +14,8 @@ import com.mentia.progress.ProgressService;
 import com.mentia.progress.ProgressService.StreakStatus;
 
 /**
- * Una vez por día avisa a quien tiene racha y todavía no entrenó hoy. Como mucho un aviso por suscripción por día
+ * Una vez por día avisa a quien todavía no entrenó hoy, incluso sin racha cuando min-streak es 0.
+ * Como mucho un aviso por suscripción por día
  * ({@code last_reminded_on}), así un reinicio o una corrida repetida no manda de más.
  */
 public class StreakReminderJob {
@@ -62,7 +63,7 @@ public class StreakReminderJob {
                 case FAILED, UNAUTHORIZED, FORBIDDEN, RATE_LIMITED, PROVIDER_UNAVAILABLE, REJECTED, CONNECTION_FAILED -> { }
             }
         }
-        log.info("Recordatorios de racha enviados: {}", sent);
+        log.info("Recordatorios de entrenamiento enviados: {}", sent);
         return sent;
     }
 }

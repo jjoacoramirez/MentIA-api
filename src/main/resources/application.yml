@@ -52,7 +52,7 @@ mentia:
     consistency-groups: [1, 2, 4, 8]   # 1 día, 2 a 3, 4 a 7 y 8 o más (más el grupo sin sesiones)
     include-admins: false              # las cuentas admin son de prueba
   notification:
-    # Recordatorios de racha por web push. Apagado por defecto: sin claves la API funciona igual.
+    # Recordatorios de entrenamiento por web push. Apagado por defecto: sin claves la API funciona igual.
     # Claves VAPID: `npx web-push generate-vapid-keys`. La privada nunca va acá ni se commitea.
     enabled: ${MENTIA_PUSH_ENABLED:false}
     vapid-public-key: ${MENTIA_PUSH_PUBLIC_KEY:}
@@ -61,8 +61,8 @@ mentia:
     subject: ${MENTIA_PUSH_SUBJECT:}
     # Se evalúa en mentia.progress.time-zone. Un aviso por suscripción por día como máximo.
     reminder-cron: "0 0 19 * * *"
-    # Racha mínima (en días) para recibir el aviso.
-    min-streak: 1
+    # 0 incluye también a quien aún no empezó o perdió la racha, siempre que hoy no haya entrenado.
+    min-streak: 0
     max-subscriptions-per-user: 5
     # Cuánto guarda el servicio de push un aviso si el dispositivo está apagado.
     ttl: 6h

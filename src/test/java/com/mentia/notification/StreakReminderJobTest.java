@@ -38,10 +38,14 @@ class StreakReminderJobTest {
 
     @BeforeEach
     void setUp() {
+        job = withMinimum(2);
+    }
+
+    private StreakReminderJob withMinimum(int minimum) {
         NotificationProperties properties = new NotificationProperties(true, PushTestKeys.PUBLIC, PushTestKeys.PRIVATE,
-                PushTestKeys.SUBJECT, "0 0 19 * * *", 2, 5, Duration.ofHours(6), Duration.ofSeconds(3),
+                PushTestKeys.SUBJECT, "0 0 19 * * *", minimum, 5, Duration.ofHours(6), Duration.ofSeconds(3),
                 Duration.ofSeconds(10), List.of("fcm.googleapis.com"));
-        job = new StreakReminderJob(notifications, progress, sender, properties, Clock.systemUTC());
+        return new StreakReminderJob(notifications, progress, sender, properties, Clock.systemUTC());
     }
 
     private void due(UUID... subscriptions) {
@@ -57,6 +61,27 @@ class StreakReminderJobTest {
 
         assertThat(job.run(TODAY)).isEqualTo(1);
         verify(notifications).markReminded(subscription, TODAY);
+    }
+
+    @Test
+    void remindsSomeoneWithoutAStreakWhoHasNotTrainedToday() {
+        job = withMinimum(0);
+        due(subscription);
+        given(progress.streakStatus(user)).willReturn(new StreakStatus(0, false));
+        given(sender.send(any())).willReturn(PushSender.Result.SENT);
+
+        assertThat(job.run(TODAY)).isEqualTo(1);
+        verify(notifications).markReminded(subscription, TODAY);
+    }
+
+    @Test
+    void someoneWithoutAStreakIsNotRemindedIfTheyAlreadyTrainedToday() {
+        job = withMinimum(0);
+        due(subscription);
+        given(progress.streakStatus(user)).willReturn(new StreakStatus(0, true));
+
+        assertThat(job.run(TODAY)).isZero();
+        verifyNoInteractions(sender);
     }
 
     @Test
