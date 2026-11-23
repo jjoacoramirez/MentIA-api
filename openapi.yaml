@@ -930,6 +930,14 @@ components:
           type: string
           maxLength: 2048
           description: URL de suscripción (`PushSubscription.endpoint`) que entrega el navegador.
+        p256dh:
+          type: string
+          maxLength: 128
+          description: Clave pública P-256 de la suscripción en base64url. Junto con auth permite personalizar el aviso cifrado. Opcional para clientes anteriores.
+        auth:
+          type: string
+          maxLength: 64
+          description: Secreto de 16 bytes de la suscripción en base64url. Se informa junto con p256dh; no se devuelve ni se registra en logs.
     ProblemDetail:
       type: object
       required: [title, status, code]
