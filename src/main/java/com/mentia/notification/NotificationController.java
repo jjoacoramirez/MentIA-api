@@ -35,7 +35,8 @@ public class NotificationController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void subscribe(@AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody PushSubscriptionRequest request) {
-        service.subscribe(user.userId(), request.endpoint());
+        if (request.p256dh() == null && request.auth() == null) service.subscribe(user.userId(), request.endpoint());
+        else service.subscribe(user.userId(), request.endpoint(), request.p256dh(), request.auth());
     }
 
     @DeleteMapping("/push-subscription")

@@ -19,4 +19,8 @@ interface PushSender {
     }
 
     Result send(String endpoint);
+
+    default Result send(String endpoint, String p256dh, String auth, boolean hasStreak) {
+        return send(endpoint);
+    }
 }

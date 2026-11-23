@@ -63,6 +63,21 @@ class NotificationIntegrationTest extends IntegrationTest {
     }
 
     @Test
+    void existingSubscriptionsReceiveKeysWithoutCreatingAnotherDevice() throws Exception {
+        var user = api.newUser();
+        String url = endpoint("keys");
+        service.subscribe(user.id(), url);
+        service.subscribe(user.id(), url, WebPushEncryptionTest.RECEIVER, WebPushEncryptionTest.AUTH);
+        assertThat(subscriptionsOf(user.id())).isEqualTo(1);
+        var device = service.devicesOf(user.id()).getFirst();
+        assertThat(device.p256dh()).isEqualTo(WebPushEncryptionTest.RECEIVER);
+        assertThat(device.auth()).isEqualTo(WebPushEncryptionTest.AUTH);
+        // Un cliente anterior no borra las claves ya registradas.
+        service.subscribe(user.id(), url);
+        assertThat(service.devicesOf(user.id()).getFirst().auth()).isEqualTo(WebPushEncryptionTest.AUTH);
+    }
+
+    @Test
     void theSameBrowserFollowsTheLastAccountThatRegisteredIt() throws Exception {
         var first = api.newUser();
         var second = api.newUser();

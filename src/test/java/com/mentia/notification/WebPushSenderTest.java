@@ -46,6 +46,17 @@ class WebPushSenderTest {
     }
 
     @Test
+    void sendsThePersonalizedMessageEncryptedWithTheSubscriptionKeys() {
+        server.expect(requestTo(PushTestKeys.ENDPOINT)).andExpect(method(HttpMethod.POST))
+                .andExpect(header("Content-Encoding", "aes128gcm"))
+                .andExpect(header("Content-Type", "application/octet-stream"))
+                .andRespond(withSuccess());
+        assertThat(sender.send(PushTestKeys.ENDPOINT, WebPushEncryptionTest.RECEIVER,
+                WebPushEncryptionTest.AUTH, true)).isEqualTo(PushSender.Result.SENT);
+        server.verify();
+    }
+
+    @Test
     void goneSubscriptionsAreReportedSoTheyCanBeDeleted() {
         server.expect(requestTo(PushTestKeys.ENDPOINT)).andRespond(withStatus(HttpStatus.GONE));
         assertThat(sender.send(PushTestKeys.ENDPOINT)).isEqualTo(PushSender.Result.GONE);

@@ -31,6 +31,7 @@ class PushTestServiceTest {
     @Mock AuthService auth;
     @Mock NotificationService notifications;
     @Mock PushSender sender;
+    @Mock com.mentia.progress.ProgressService progress;
 
     final UUID user = UUID.randomUUID();
 
@@ -38,7 +39,7 @@ class PushTestServiceTest {
         NotificationProperties properties = new NotificationProperties(enabled, PushTestKeys.PUBLIC,
                 PushTestKeys.PRIVATE, PushTestKeys.SUBJECT, "0 0 19 * * *", 1, 5, Duration.ofHours(6),
                 Duration.ofSeconds(3), Duration.ofSeconds(10), List.of("fcm.googleapis.com"));
-        return new PushTestService(auth, notifications, sender, properties);
+        return new PushTestService(auth, notifications, sender, properties, progress);
     }
 
     private NotificationService.Device device(String id) {
@@ -54,6 +55,20 @@ class PushTestServiceTest {
         assertThat(service(true).send("ana")).isEqualTo(new TestPushResponse(2, 2, 0, 0));
         // Es una prueba: no cuenta como el recordatorio del día.
         verify(notifications, never()).markReminded(any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 4})
+    void theManualTestChoosesTheMessageUsingTheCurrentStreak(int streak) {
+        String endpoint = PushTestKeys.ENDPOINT;
+        given(auth.findUserId("ana")).willReturn(Optional.of(user));
+        given(notifications.devicesOf(user)).willReturn(List.of(new NotificationService.Device(UUID.randomUUID(),
+                endpoint, WebPushEncryptionTest.RECEIVER, WebPushEncryptionTest.AUTH)));
+        given(progress.streakStatus(user)).willReturn(new com.mentia.progress.ProgressService.StreakStatus(streak, false));
+        given(sender.send(endpoint, WebPushEncryptionTest.RECEIVER, WebPushEncryptionTest.AUTH, streak > 0))
+                .willReturn(PushSender.Result.SENT);
+        assertThat(service(true).send("ana").sent()).isEqualTo(1);
+        verify(sender).send(endpoint, WebPushEncryptionTest.RECEIVER, WebPushEncryptionTest.AUTH, streak > 0);
     }
 
     @Test

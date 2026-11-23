@@ -10,7 +10,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * Manda un push sin contenido (no hace falta cifrar) autenticado con VAPID. No sigue redirecciones en el POST y
+ * Manda un push con contenido cifrado cuando la suscripción tiene claves, autenticado con VAPID. No sigue redirecciones en el POST y
  * nunca loguea el endpoint ni el JWT: solo el código de estado.
  */
 final class WebPushSender implements PushSender {
@@ -31,17 +31,28 @@ final class WebPushSender implements PushSender {
 
     @Override
     public Result send(String endpoint) {
+        return send(endpoint, null, null, false);
+    }
+
+    @Override
+    public Result send(String endpoint, String p256dh, String auth, boolean hasStreak) {
         if (!policy.isAllowed(endpoint)) {
             return Result.GONE;
         }
         try {
-            client.post()
+            var request = client.post()
                     .uri(URI.create(endpoint))
                     .header(HttpHeaders.AUTHORIZATION, signer.authorization(endpoint))
                     .header("TTL", Long.toString(ttlSeconds))
                     .header("Urgency", "normal")
-                    .header("Topic", "streak")
-                    .retrieve()
+                    .header("Topic", "streak");
+            if (p256dh != null && auth != null) {
+                byte[] payload = (hasStreak ? "{\"kind\":\"streak\"}" : "{\"kind\":\"start\"}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                request.header("Content-Encoding", "aes128gcm")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
+                        .body(WebPushEncryption.encrypt(p256dh, auth, payload));
+            }
+            request.retrieve()
                     .toBodilessEntity();
             return Result.SENT;
         } catch (RestClientResponseException e) {
@@ -59,7 +70,7 @@ final class WebPushSender implements PushSender {
         } catch (ResourceAccessException e) {
             log.warn("No se pudo contactar al servicio de push: {}", e.getClass().getSimpleName());
             return Result.CONNECTION_FAILED;
-        } catch (RuntimeException e) {
+        } catch (java.security.GeneralSecurityException | RuntimeException e) {
             log.warn("No se pudo contactar al servicio de push: {}", e.getClass().getSimpleName());
             return Result.FAILED;
         }

@@ -16,7 +16,7 @@ import com.mentia.common.error.ErrorCode;
 import com.mentia.notification.dto.TestPushResponse;
 
 /**
- * Herramienta de debug para admins: manda ya el aviso a los dispositivos de una cuenta, sin mirar la racha ni el
+ * Herramienta de debug para admins: manda ya el aviso a los dispositivos de una cuenta, sin filtrar por racha ni el
  * límite de uno por día, y sin marcar el día como recordado. No devuelve ni loguea las URLs de suscripción.
  */
 @Service
@@ -28,13 +28,15 @@ public class PushTestService {
     private final NotificationService notifications;
     private final PushSender sender;
     private final NotificationProperties properties;
+    private final com.mentia.progress.ProgressService progress;
 
     public PushTestService(AuthService authService, NotificationService notifications, PushSender sender,
-            NotificationProperties properties) {
+            NotificationProperties properties, com.mentia.progress.ProgressService progress) {
         this.authService = authService;
         this.notifications = notifications;
         this.sender = sender;
         this.properties = properties;
+        this.progress = progress;
     }
 
     /** Sin transacción: mientras se espera al servicio de push no se mantiene abierta una conexión a la base. */
@@ -50,8 +52,11 @@ public class PushTestService {
         int removed = 0;
         int failed = 0;
         Map<String, Integer> failures = new LinkedHashMap<>();
+        boolean hasStreak = devices.stream().anyMatch(device -> device.p256dh() != null)
+                && progress.streakStatus(userId).streak() > 0;
         for (NotificationService.Device device : devices) {
-            PushSender.Result result = sender.send(device.endpoint());
+            PushSender.Result result = device.p256dh() == null || device.auth() == null ? sender.send(device.endpoint())
+                    : sender.send(device.endpoint(), device.p256dh(), device.auth(), hasStreak);
             switch (result) {
                 case SENT -> sent++;
                 case GONE -> {

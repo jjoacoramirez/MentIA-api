@@ -44,17 +44,16 @@ public class StreakReminderJob {
 
     /** Devuelve cuántos avisos se mandaron. */
     int run(LocalDate today) {
-        Map<UUID, Boolean> atRisk = new HashMap<>();
+        Map<UUID, StreakStatus> statuses = new HashMap<>();
         int sent = 0;
         for (NotificationService.Due due : notifications.due(today)) {
-            boolean send = atRisk.computeIfAbsent(due.userId(), id -> {
-                StreakStatus status = progress.streakStatus(id);
-                return status.streak() >= properties.minStreak() && !status.trainedToday();
-            });
-            if (!send) {
+            StreakStatus status = statuses.computeIfAbsent(due.userId(), progress::streakStatus);
+            if (status.streak() < properties.minStreak() || status.trainedToday()) {
                 continue;
             }
-            switch (sender.send(due.endpoint())) {
+            PushSender.Result result = due.p256dh() == null || due.auth() == null ? sender.send(due.endpoint())
+                    : sender.send(due.endpoint(), due.p256dh(), due.auth(), status.streak() > 0);
+            switch (result) {
                 case SENT -> {
                     notifications.markReminded(due.subscriptionId(), today);
                     sent++;

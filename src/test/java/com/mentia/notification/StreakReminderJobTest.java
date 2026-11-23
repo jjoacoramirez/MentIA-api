@@ -84,6 +84,20 @@ class StreakReminderJobTest {
         verifyNoInteractions(sender);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 5})
+    void choosesTheMessageFromTheCurrentStreak(int streak) {
+        job = withMinimum(0);
+        String endpoint = PushTestKeys.ENDPOINT;
+        given(notifications.due(TODAY)).willReturn(List.of(new NotificationService.Due(subscription, user,
+                endpoint, WebPushEncryptionTest.RECEIVER, WebPushEncryptionTest.AUTH)));
+        given(progress.streakStatus(user)).willReturn(new StreakStatus(streak, false));
+        given(sender.send(endpoint, WebPushEncryptionTest.RECEIVER, WebPushEncryptionTest.AUTH, streak > 0))
+                .willReturn(PushSender.Result.SENT);
+        assertThat(job.run(TODAY)).isEqualTo(1);
+        verify(sender).send(endpoint, WebPushEncryptionTest.RECEIVER, WebPushEncryptionTest.AUTH, streak > 0);
+    }
+
     @Test
     void doesNotRemindSomeoneWhoAlreadyTrainedToday() {
         due(subscription);

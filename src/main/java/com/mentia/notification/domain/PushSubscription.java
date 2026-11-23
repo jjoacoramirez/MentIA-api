@@ -28,6 +28,19 @@ public class PushSubscription {
     @Column(name = "last_reminded_on")
     private LocalDate lastRemindedOn;
 
+    @Column(name = "p256dh", length = 128)
+    private String p256dh;
+
+    @Column(name = "auth_secret", length = 64)
+    private String authSecret;
+
+    public String getP256dh() { return p256dh; }
+    public String getAuthSecret() { return authSecret; }
+    public void updateKeys(String p256dh, String authSecret) {
+        this.p256dh = p256dh;
+        this.authSecret = authSecret;
+    }
+
     protected PushSubscription() {
     }
 
